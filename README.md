@@ -1,12 +1,13 @@
-DeviceHive Security Extension Demo    
+DeviceHive Security Extension Demo      
 Adds the classes found in securehive/src/main/java to the DeviceHive java client library   
 
 
 Base resources:   
-https://docs.devicehive.com/docs    
-https://github.com/devicehive/devicehive-java  
-https://github.com/lsds/sgx-lkl/tree/legacy   
-https://github.com/lsds/sgx-lkl/wiki/Remote-Attestation-and-Remote-Control  
+
+https://docs.devicehive.com/docs     
+https://github.com/devicehive/devicehive-java   
+https://github.com/lsds/sgx-lkl/tree/legacy     
+https://github.com/lsds/sgx-lkl/wiki/Remote-Attestation-and-Remote-Control    
 
 
 Assumptions:    
