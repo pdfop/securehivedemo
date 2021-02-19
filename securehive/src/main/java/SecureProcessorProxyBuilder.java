@@ -1,5 +1,3 @@
-package com.github.devicehive.client.service;
-
 import com.github.devicehive.client.service.Device;
 import com.github.devicehive.client.model.NotificationFilter;
 

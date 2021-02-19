@@ -1,9 +1,6 @@
-package com.github.devicehive.client.service;
-
 import java.io.*; 
 import java.net.*; 
-import java.util.concurrent.*;
-import com.github.devicehive.client.model.DeviceCommandWrapper; 
+import java.util.concurrent.*; 
 import org.joda.time.DateTime;  
 import com.google.gson.Gson.*;
 import com.google.gson.*; 
@@ -13,6 +10,7 @@ import com.github.devicehive.client.model.DeviceNotification;
 import com.github.devicehive.client.model.DeviceNotificationsCallback;
 import com.github.devicehive.client.model.FailureData;
 import com.github.devicehive.client.model.NotificationFilter;
+import com.github.devicehive.client.service.Device; 
 
 
 /**

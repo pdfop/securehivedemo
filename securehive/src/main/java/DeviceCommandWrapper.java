@@ -1,5 +1,3 @@
-package com.github.devicehive.client.model; 
-
 import java.io.Serializable; 
 import com.github.devicehive.client.model.Parameter;
 import java.util.List;

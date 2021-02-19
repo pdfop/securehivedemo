@@ -1,6 +1,3 @@
-package com.github.devicehive.client.service;
-
-
 import com.google.gson.JsonObject;
 import com.google.gson.JsonElement;
 import com.google.gson.Gson.*;
@@ -10,7 +7,6 @@ import com.github.devicehive.client.service.DeviceCommand;
 import com.github.devicehive.client.model.DeviceNotification;
 import com.github.devicehive.client.model.FailureData;
 import com.github.devicehive.client.model.Parameter;
-import com.github.devicehive.client.model.DeviceCommandWrapper; 
 
 import java.util.Collections;
 import java.util.List;

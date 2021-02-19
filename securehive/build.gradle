@@ -1,18 +1,25 @@
 apply plugin: 'java'
 apply plugin: 'java-library'
+
 repositories {
 		  flatDir {
-       			dirs 'devicehive'}		
+       			dirs '/home/pd/.m2/repository/com/github/devicehive/devicehive-java-websocket/1.0.2'}	
+		  flatDir {
+       			dirs '/home/pd/.m2/repository/com/github/devicehive/devicehive-java-client/3.1.2'}
+		  flatDir {
+       			dirs '/home/pd/.m2/repository/com/github/devicehive/devicehive-java-rest/1.0.2'}	
 		mavenCentral()
+   		//maven { url 'https://jitpack.io' }
 }
 dependencies {  
+	compile 'com.google.code.gson:gson:2.8.6'
 	compile 'com.github.devicehive.devicehive-java:devicehive-java-websocket:1.0.2-jar-with-dependencies'
 	compile 'com.github.devicehive.devicehive-java:devicehive-java-rest:1.0.2-jar-with-dependencies'
 	compile 'com.github.devicehive.devicehive-java:devicehive-java-client:3.1.2-jar-with-dependencies'
 	compile group: 'joda-time', name: 'joda-time', version: '2.9.9'
-	compile 'junit:junit:4.13'
-	
+ 	compile 'junit:junit:4.13'
 }
+
 jar {
     manifest {
     }

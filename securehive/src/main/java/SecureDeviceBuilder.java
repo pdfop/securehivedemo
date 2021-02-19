@@ -1,5 +1,3 @@
-package com.github.devicehive.client.service;
-
 import com.github.devicehive.client.service.Device;
 import java.io.FileInputStream; 
 import java.io.IOException; 

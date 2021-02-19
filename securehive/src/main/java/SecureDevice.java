@@ -1,5 +1,3 @@
-package com.github.devicehive.client.service;
-
 import javax.crypto.spec.IvParameterSpec; 
 import java.security.SecureRandom; 
 import java.io.FileInputStream; 
@@ -37,7 +35,7 @@ import com.google.gson.JsonElement;
  * This is done to preserve the original state of the server code. 
  * The existence of this class or the difference between it and its underlying Device are unknown to the server.
  */
-public class SecureDevice implements DeviceInterface
+public class SecureDevice
 {
     // authentication
     private PublicKey enclavePK; 
