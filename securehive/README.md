@@ -20,6 +20,9 @@ When creating an encrypted notification or command the system will include the I
 
 The entire system and its classes are transparent to the DeviceHive server and work with  an unmodified Server. 
 
+# Dataflow  
+The diagram below displays the way messages take through the system. They are encrypted during the entire transmission and only decrypted while in the enclave.  
+![diagram](https://puu.sh/HkleA/72a285c15b.png)  
 # Classes 
 
 ## SecureDevice 
