@@ -14,12 +14,19 @@ public class DeviceCommandWrapper implements Serializable
 {
     public String commandName; 
     public List<Parameter> parameters; 
-    public String deviceId; 
-    public DeviceCommandWrapper(String commandName, List<Parameter> parameters, String deviceId)
+    public DeviceCommandWrapper(String commandName, List<Parameter> parameters)
     {
         this.commandName = commandName; 
         this.parameters = parameters; 
-        this.deviceId = deviceId; 
     }
 
+    public String getCommandName()
+    {
+        return this.commandName; 
+    }
+
+    public List<Parameter> getParameters()
+    {
+        return this.parameters; 
+    }
 }

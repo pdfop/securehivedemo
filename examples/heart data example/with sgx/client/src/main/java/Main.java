@@ -13,7 +13,6 @@ public class Main
 {
     private static final int port = 6767;  
     private static final int threshhold = 500; 
-    
     public static void main(String[] args) throws Exception
     {
         Main main = new Main(); 
@@ -30,11 +29,10 @@ public class Main
     private class MySecureProcessor extends SecureProcessor
     {   
         @Override 
-        public void process(DeviceNotification notification) throws Exception
-        { 
-                String deviceId = notification.getDeviceId(); 
+        public void process(DeviceNotificationWrapper notification) throws Exception
+        {  
                 List<Parameter> response = new ArrayList<Parameter>(); 
-                JsonObject parameters = getDecryptedParameters(notification, deviceId); 
+                JsonObject parameters = getDecryptedParameters(notification); 
 
                 Parameter hr = new Parameter("heartrate", ""); 
                 Parameter lqts = new Parameter("lqts", ""); 
@@ -52,7 +50,7 @@ public class Main
                 hr.setValue(String.valueOf(60/((double)rr/1000))); 
                 response.add(lqts);
                 response.add(hr); 
-                this.getServers().get(deviceId).sendCommand(encryptedCommand("response", response, deviceId));
+                sendCommand(encryptedCommand("response", response));                 
         }
     }
 }

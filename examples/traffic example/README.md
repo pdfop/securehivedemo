@@ -1,4 +1,4 @@
-Implemented example of the SecureScala CEP case study  
+Inspired by the SecureScala CEP case study  
 
 
 Code in device/ runs on a trusted device, it generates data and publishes it as a notification  

@@ -36,12 +36,10 @@ public class Main {
     private static DeviceHive client; 
     // Devices managed by this Host App 
     List<String> deviceIds; 
-    Map<String, Device> devices = new Hashtable<String, Device>();
     // proxy connection
-    Map<String, SecureProcessorProxy> proxies = new Hashtable<String, SecureProcessorProxy>();
     // ** additional parameters for the proxy connection ** 
     private final String enclaveIP = "10.0.1.1"; 
-    private final int port = 6767; 
+    private static final int[] ports = {6767,6768,6769}; 
 
 
     public static void main(String[] args) throws IOException
@@ -63,15 +61,13 @@ public class Main {
                 return; 
             }
             Device device = response.getData();
-            devices.put(deviceId, device); 
 
             NotificationFilter filter = new NotificationFilter(); 
             filter.setNotificationNames("data"); 
             filter.setStartTimestamp(DateTime.now()); 
             filter.setEndTimestamp(DateTime.now());
-	    // ** creation of a proxy ** 
-            SecureProcessorProxy proxy = SecureProcessorProxyBuilder.build(device, filter, enclaveIP, port); 
-            proxies.put(deviceId,proxy); 
+	        // ** creation of a proxy ** 
+            SecureProcessorProxy proxy = SecureProcessorProxyBuilder.build(device, filter, enclaveIP, ports[deviceIds.indexOf(deviceId)]); 
 
         }
     }

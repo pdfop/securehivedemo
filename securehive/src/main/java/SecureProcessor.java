@@ -46,23 +46,34 @@ import java.io.IOException;
 import java.net.Socket; 
 import java.net.ServerSocket; 
 
-
+import java.nio.channels.*; 
+import java.nio.charset.*;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import com.google.gson.Gson.*;
+import com.google.gson.*; 
+import java.net.InetSocketAddress;
 import static org.junit.Assert.*; 
 
 
 public class SecureProcessor
 {
     // proxy connection
-    private ServerSocket serverSocket; 
-    private Map<String, Server> servers = new Hashtable<String, Server>();  
+    private Gson gson; 
+    private ServerSocketChannel serverSocket;
+    private SocketChannel in;
+    private SocketChannel out; 
     // storing cerfiticates 
     private KeyStore store; 
     private char[] pwdArray = "testpw".toCharArray(); 
     private final String storePath = "resources/SecureHiveClient.pkcs12";  
     // mutual authentication 
     private PrivateKey enclaveSK; 
+    private PublicKey devicePK; 
     // message encryption
-    private Map<String,SecretKey> messageKeys = new Hashtable<String, SecretKey>(); 
+    private SecretKey messageKey; 
+
+    private ByteBuffer buffer = ByteBuffer.allocate(8192);
 
     // encoding 
     private static Base64.Decoder decoder = Base64.getDecoder(); 
@@ -74,12 +85,37 @@ public class SecureProcessor
     { 
         System.out.println("init server");
         initSecurity(); 
-        serverSocket = new ServerSocket(port);
-        while(true)
+        GsonBuilder builder = new GsonBuilder(); 
+        JsonSerializer<DateTime> dateTimeSerializer = new JsonSerializer<DateTime>()
         {
-            new Server(serverSocket.accept()).start();  
-            System.out.println("Connected");
-        }  
+            @Override 
+            public JsonElement serialize(DateTime src, java.lang.reflect.Type typeOfSrc, JsonSerializationContext context)
+            {
+                return new JsonPrimitive(src.toString());
+            } 
+        }; 
+        builder.registerTypeAdapter(DateTime.class, dateTimeSerializer); 
+
+        JsonDeserializer<DateTime> dateTimeDeserializer = new JsonDeserializer<DateTime>()
+        {
+            @Override 
+            public DateTime deserialize(JsonElement json, java.lang.reflect.Type typeOfT, JsonDeserializationContext context) throws JsonParseException 
+            {
+                return DateTime.parse(json.getAsString());  
+            } 
+        }; 
+        builder.registerTypeAdapter(DateTime.class, dateTimeDeserializer);
+
+        builder.setLenient(); 
+        gson = builder.create(); 
+
+        serverSocket = ServerSocketChannel.open(); 
+        serverSocket.socket().bind(new InetSocketAddress(port)); 
+        out = serverSocket.accept();
+        out.configureBlocking(false); 
+        in = serverSocket.accept();
+        keyExchange(); 
+        receiveNotifications(); 
     }
 
     /**
@@ -87,7 +123,7 @@ public class SecureProcessor
      * The logic depending on the DeviceNotification is to be implemented here. 
      * This is the equivalent of the onSuccess method of the DeviceNotificationsCallback for regular DeviceHive subscriptions 
      */
-    public void process(DeviceNotification notification) throws Exception
+    public void process(DeviceNotificationWrapper notification) throws Exception
     {
         throw new RuntimeException("Method process must be Overriden for any SecureProcessor Instance");
     }
@@ -97,11 +133,11 @@ public class SecureProcessor
      * @see DeviceCommandWrapper for an explanation of why this returns a Wrapper 
      * Adds additional parameters "iv" and "nonce" to the command to allow for decryption and verification of the freshness of the command.
      */
-    public DeviceCommandWrapper encryptedCommand(String commandName, List<Parameter> parameters, String deviceId) throws Exception
+    public DeviceCommandWrapper encryptedCommand(String commandName, List<Parameter> parameters) throws Exception
     {
         Cipher encrypt = Cipher.getInstance("AES/CBC/PKCS5Padding");
         IvParameterSpec iv = generateIV();
-        encrypt.init(Cipher.ENCRYPT_MODE, messageKeys.get(deviceId), iv); 
+        encrypt.init(Cipher.ENCRYPT_MODE, messageKey, iv); 
 
         for(Parameter param : parameters)
         {
@@ -112,15 +148,8 @@ public class SecureProcessor
         // add IV and Nonce 
         parameters.add(new Parameter("iv", encoder.encodeToString(iv.getIV()))); 
         parameters.add(new Parameter("nonce", encoder.encodeToString(encrypt.doFinal(generateNonce().getBytes()))));   
-        return new DeviceCommandWrapper(commandName, parameters, deviceId); 
-    }
-
-    /**
-     * Overloaded encryption method for SecureProcessors that only handle a single Device
-     */
-    public DeviceCommandWrapper encryptedCommand(String commandName, List<Parameter> parameters) throws Exception
-    {
-        return encryptedCommand(commandName, parameters, deviceIds.get(0));
+       
+        return new DeviceCommandWrapper(commandName, parameters); 
     }
 
     /**
@@ -177,13 +206,13 @@ public class SecureProcessor
      * Expects the Parameters to include a key "iv" to be used to initialize the decryption cipher
      * @returns a JsonObject of the decrypted parameters of a DeviceNotification, equivalent to DeviceNotification.getParameters() 
      */
-    public JsonObject getDecryptedParameters(DeviceNotification notification, String deviceId) throws Exception
+    public JsonObject getDecryptedParameters(DeviceNotificationWrapper notification) throws Exception
     {
         JsonObject parameters = notification.getParameters();  
         JsonObject decryptedParameters = new JsonObject(); 
         Cipher decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding"); 
         IvParameterSpec iv = new IvParameterSpec(decoder.decode(parameters.get("iv").getAsString()));
-        decrypt.init(Cipher.DECRYPT_MODE, messageKeys.get(deviceId), iv);
+        decrypt.init(Cipher.DECRYPT_MODE, messageKey, iv);
         java.util.Set<java.util.Map.Entry<java.lang.String,JsonElement>> entries = parameters.entrySet(); 
         for(java.util.Map.Entry<String, JsonElement> entry : entries)
         {
@@ -198,51 +227,8 @@ public class SecureProcessor
         return decryptedParameters; 
     }
 
-    /**
-     * Overloaded decryption method for SecureProcessors that only handle a single device 
-     */
-    public JsonObject getDecryptedParameters(DeviceNotification notification) throws Exception
-    {
-        return getDecryptedParameters(notification, deviceIds.get(0)); 
-    }
-    
-    public Map<String, Server> getServers()
-    {
-        return this.servers;
-    }
 
-    protected class Server extends Thread
-    {
-        private String deviceId; 
-        // proxy connection
-        private Socket clientSocket; 
-        private ObjectInputStream in; 
-        private ObjectOutputStream out;
-        // mutual authentication
-        private PublicKey devicePK; 
 
-        public Server(Socket clientSocket)
-        {
-            this.clientSocket = clientSocket; 
-        }
-
-        public void run()
-        {
-            try
-            {
-                out = new ObjectOutputStream(new BufferedOutputStream(clientSocket.getOutputStream())); 
-                out.flush();
-                in = new ObjectInputStream(new BufferedInputStream(clientSocket.getInputStream())); 
-                DeviceNotification notification; 
-                keyExchange(); 
-                receiveNotifications(); 
-            }
-            catch(Exception e)
-            {
-                System.out.println("Failed to establish proxy connection " + e.getMessage()); 
-                e.printStackTrace(System.out); 
-            }
-        }
 
         /**
          * Read a DeviceNotification from the in stream and process it 
@@ -251,9 +237,13 @@ public class SecureProcessor
          */
         private void receiveNotifications() throws Exception
         {
-            DeviceNotification notification; 
-            while((notification = (DeviceNotification) in.readObject()) != null)
+            DeviceNotificationWrapper notification; 
+            int bytesRead = 0;  
+            while((bytesRead = in.read(buffer)) > 0)
             {
+                String s = new String(java.util.Arrays.copyOfRange(buffer.array(), 0 , bytesRead));
+                buffer.clear();  
+                notification = gson.fromJson(s.trim(), DeviceNotificationWrapper.class); 
                 process(notification); 
             }
         }
@@ -266,8 +256,11 @@ public class SecureProcessor
         {
             try
             {  
-                out.writeObject(command);  
-                out.flush();  
+                ByteBuffer bytes = StandardCharsets.UTF_8.encode(gson.toJson(command)); 
+                while(bytes.hasRemaining())
+                {
+                    out.write(bytes);
+                }   
             }
             catch(Exception e)
             {
@@ -295,57 +288,57 @@ public class SecureProcessor
 
         private void keyExchange() throws Exception
         { 
-            DeviceNotification notification;
-            String timeStamp = DateTime.now().toString();       
-            while((notification = ((DeviceNotification) in.readObject())) != null)
+            DeviceNotificationWrapper notification = new DeviceNotificationWrapper(null,null,null,null,null,null); 
+            int bytesRead = 0;  
+            while((bytesRead = in.read(buffer)) > 0)
             {
+                String s = new String(java.util.Arrays.copyOfRange(buffer.array(), 0 , bytesRead));
+                buffer.clear();  
+                notification = gson.fromJson(s.trim(), DeviceNotificationWrapper.class); 
                 if(notification.getNotification().equals("$keyrequest"))
                 {
-                    // add device to processor 
-                    deviceId = notification.getDeviceId(); 
-                    servers.put(deviceId,this);
-                    deviceIds.add(deviceId);  
-                    // load enclave cerfiticate 
-                    loadDeviceCert(deviceId); 
-                    // sign a time stamp  
-                    List<Parameter> params = new ArrayList<Parameter>(); 
-                    params.add(new Parameter("timestamp", timeStamp)); 
-                    Signature privateSignature = Signature.getInstance("SHA256withRSA");
-                    privateSignature.initSign(enclaveSK);
-                    privateSignature.update(timeStamp.getBytes());
-                    byte[] signature = privateSignature.sign();
-                    String signedStamp = Base64.getEncoder().encodeToString(signature);
-                    params.add(new Parameter("signed",signedStamp));
-                    DeviceCommandWrapper wrapper = new DeviceCommandWrapper("$keyexchange", params, null); 
-                    // send signed and plaintext stamp as a means of authentication
-                    sendCommand(wrapper);
+                    break;
                 }
-    
+            }
+
+            String timestamp = DateTime.now().toString(); 
+            List<Parameter> params = new ArrayList<Parameter>(); 
+            params.add(new Parameter("timestamp", timestamp)); 
+
+            Signature privateSignature = Signature.getInstance("SHA256withRSA");
+            privateSignature.initSign(enclaveSK);
+            privateSignature.update(timestamp.getBytes());
+            byte[] signature = privateSignature.sign();
+            String signedStamp = Base64.getEncoder().encodeToString(signature);
+            params.add(new Parameter("signed",signedStamp));
+            DeviceCommandWrapper wrapper = new DeviceCommandWrapper("$keyexchange", params); 
+            sendCommand(wrapper);   
+
+            while((bytesRead = in.read(buffer)) > 0)
+            {
+                String s = new String(java.util.Arrays.copyOfRange(buffer.array(), 0 , bytesRead));
+                buffer.clear();  
+                notification = gson.fromJson(s.trim(), DeviceNotificationWrapper.class); 
                 if(notification.getNotification().equals("$keyexchange"))
-                {
-                    // extract signed timestamp and verify that is what signed by the secret key belonging to devicePK 
-                    JsonObject parameters = notification.getParameters(); 
+                {  
+                    String deviceId = notification.getDeviceId(); 
+                    loadDeviceCert(deviceId);
+                    JsonObject parameters = notification.getParameters();
                     Signature publicSignature = Signature.getInstance("SHA256withRSA");
                     publicSignature.initVerify(devicePK);
-                    publicSignature.update(timeStamp.getBytes());
+                    publicSignature.update(timestamp.getBytes());
                     byte[] signatureBytes = decoder.decode(parameters.get("signed").getAsString());
                     Boolean verified = publicSignature.verify(signatureBytes);
-
-                    // authentication successful, accept the key as new message key 
                     if(verified)
                     { 
                         Cipher decrypt=Cipher.getInstance("RSA/ECB/PKCS1Padding");
                         decrypt.init(Cipher.PRIVATE_KEY, enclaveSK);
-                        byte[] decodedKey = decrypt.doFinal(decoder.decode(parameters.get("key").getAsString())); 
-                        messageKeys.put(deviceId, new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES"));
-                        // sent to resolve blocking wait for a command after the keyexchange notification 
-                        sendCommand(new DeviceCommandWrapper("ignore", null, null));
+                        byte[] decodedKey = decrypt.doFinal(decoder.decode(parameters.get("key").getAsString()));
+                        messageKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
                         return; 
                     }
-                }
-            }          
+                } 
+            }
+        
         }
-
-    }
-
 }

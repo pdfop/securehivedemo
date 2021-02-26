@@ -42,7 +42,7 @@ public class SecureDevice
     private PrivateKey deviceSK;
     // encryption
     private SecretKey messageKey;  
-    private final Duration NONCE_TIMEOUT;  
+    private Duration NONCE_TIMEOUT;  
     // contains certificatates 
     private KeyStore store;
     private final String storePath; 
@@ -364,10 +364,17 @@ public class SecureDevice
             }
             if(entry.getKey().equals("nonce"))
             {
-                DateTime nonce = DateTime.parse(new String(decrypt.doFinal(decoder.decode(entry.getValue().getAsString())))); 
-                if(new Duration(command.getTimestamp(), nonce).isLongerThan(NONCE_TIMEOUT))
+                DateTime nonce = DateTime.parse(new String(decrypt.doFinal(decoder.decode(entry.getValue().getAsString()))));   
+                if(new Duration(nonce, command.getTimestamp()).isLongerThan(NONCE_TIMEOUT))
                 {
-                    return null;  
+                    // usually I would want to return null and and react to the command in this case 
+                    // for now nothing is going to happen, until I can find a working solution
+                    // the problem is that the enclave is unable to get a valid timer to create the nonce timestamp 
+                    // even when setting the correct system time for the alpine image 
+                    // depending on lkl's possibilities it might be necessary to come up with another way of using nonces e.g. actual random values 
+                    // however this would likely be a lot more complex as nonces have to be tracked on both sides 
+                    // TODO: FIX NONCE 
+                    //return null;  
                 }
             } 
             else

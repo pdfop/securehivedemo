@@ -1,10 +1,15 @@
 import java.util.Scanner;
-import java.io.*;
 import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
-import java.lang.IllegalThreadStateException; 
+import java.io.*; 
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger; 
+import java.util.Arrays; 
+
 import org.joda.time.DateTime; 
+import com.google.gson.JsonObject;
+
 import com.github.devicehive.client.model.DHResponse;
 import com.github.devicehive.client.model.FailureData;
 import com.github.devicehive.client.service.Device;
@@ -15,26 +20,6 @@ import com.github.devicehive.client.model.DeviceNotification;
 import com.github.devicehive.client.model.DeviceCommandsCallback;
 import com.github.devicehive.client.model.CommandFilter; 
 import com.github.devicehive.client.service.DeviceCommand;
-
-import javax.crypto.spec.IvParameterSpec; 
-import java.security.SecureRandom; 
-import java.io.FileInputStream; 
-import java.io.FileOutputStream; 
-import java.security.*;
-import java.security.cert.Certificate; 
-import javax.crypto.*; 
-import java.io.*; 
-import java.util.concurrent.*;
-import java.util.Arrays; 
-import static org.junit.Assert.*; 
-import javax.crypto.spec.PBEKeySpec;
-import java.security.spec.InvalidKeySpecException;
-import java.security.cert.CertificateException; 
-import java.util.Base64; 
-import com.google.gson.*;
-import java.nio.charset.StandardCharsets;
-
-import java.util.concurrent.atomic.AtomicInteger; 
 
 public class Main
 {
@@ -48,10 +33,10 @@ public class Main
     private String deviceId; 
     // execution time measurement 
     private List<Long> times = new ArrayList<Long>();
-    private List <Long> encTimes = new ArrayList<Long>();
-    private int timerIndex = 0;   
+    //private List <Long> encTimes = new ArrayList<Long>();
+    private AtomicInteger timerIndex = new AtomicInteger(0);   
     // data loading 
-    private int dataIndex = 0; 
+    private AtomicInteger dataIndex = new AtomicInteger(0); 
     private List<List<String>> data = new ArrayList<>(); 
  
     public static void main(String[] args) throws InterruptedException, IllegalThreadStateException, Exception
@@ -118,33 +103,26 @@ public class Main
         {
             public void onSuccess(List<DeviceCommand> commands)
             {   
-                // assert that a command has been found, not stricly necessary as this method should not trigger without a new command arriving 
-                // however I have seen some missfires with this triggering on commands that didn't match the filter and thus were not in the list 
-                // TODO: do another test run to see if this still happens 
-                if(!(commands == null || commands.isEmpty()))
-                {
-                    for(DeviceCommand command : commands)
-                    {   
-                        try
-                        {
-                            // also not necessary, for now still in here because of the issue described above 
-                            if(command.getCommandName().equals("response"))
-                            {
-                                // measuring time from notification creation until parameter decryption of the response to represent system latency 
-                                JsonObject parameters = secureDevice.getDecryptedParameters(command);
-                                long end = System.nanoTime();  
-                                times.set(timerIndex, TimeUnit.NANOSECONDS.toMillis(end - times.get(timerIndex))); 
-                                System.out.println(timerIndex); 
-                                timerIndex++; 
-                            }
-                            
-                        }
-                        catch(Exception e)
-                        {
-                            e.printStackTrace(System.out);
-                        }
+                for(DeviceCommand command : commands)
+                {   
+                    try
+                    {
+                       // measuring time from notification creation until parameter decryption of the response to represent system latency 
+                        JsonObject parameters = secureDevice.getDecryptedParameters(command);
+                        long end = System.nanoTime();
+                        int current = timerIndex.getAndIncrement();   
+                        times.set(current, TimeUnit.NANOSECONDS.toMillis(end - times.get(current))); 
+                        System.out.println(current); 
                     }
+                    
+                    catch(Exception e)
+                    {
+                        System.out.println(e.getMessage()); 
+                       e.printStackTrace(System.out);
+                    }
+                
                 }
+                
             }
 
             public void onFail(FailureData fail)
@@ -162,19 +140,20 @@ public class Main
         // schedule the device to send a notification with variable delay 
         Callable<Void> sendData = new Callable<Void>() {
             public Void call() {
+                int current = dataIndex.getAndIncrement(); 
                 try 
                 { 
                     // time stamp for the start of the lifecycle of this notification 
                     long start = System.nanoTime(); 
                     // build notification parameters    
                     List<Parameter> params = new ArrayList<Parameter>(); 
-                    params.add(new Parameter("qt", data.get(dataIndex).get(0))); 
-                    params.add(new Parameter("rr", data.get(dataIndex).get(2)));
+                    params.add(new Parameter("qt", data.get(current).get(0))); 
+                    params.add(new Parameter("rr", data.get(current).get(2)));
+                    times.add(start);
                     // encrypt and publish the notification 
                     secureDevice.sendEncryptedNotification("data", params);
                     // addtional statistic for the length of just the creation, encryption and sending time, relevant for comparison with homomorphic encyption
-                    encTimes.add(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
-                    times.add(start);
+                    //encTimes.add(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
                     
                 } 
                 catch(Exception e)
@@ -184,8 +163,8 @@ public class Main
                 }
                 finally
                 {
-                    // stopping after we sampled 450 times 
-                    if(timerIndex >= 100)
+                    // stopping after we processed all available data  
+                    if(current >= data.size() -1)
                     {
                         try
                         {
@@ -193,8 +172,9 @@ public class Main
                             FileWriter writer = new FileWriter(deviceId +  ".txt"); 
                             for (int i = 0; i < times.size(); i++)
                             {
-                                String data = times.get(i).toString() + "," + encTimes.get(i).toString() + "\n"; 
-                                writer.write(data);     
+                                long time = times.get(i);
+                                String dataString = String.valueOf(time) + "\n"; 
+                                writer.write(dataString);     
                             }   
                             writer.close(); 
                             System.out.println("File Written"); 
@@ -208,8 +188,7 @@ public class Main
                     else
                     {
                         // here we can make the scheduling rate variable e.g. by additionally reading a measurement delay from our data csv 
-                        service.schedule(this,  Long.parseLong(data.get(dataIndex).get(2)), TimeUnit.MILLISECONDS);
-                        dataIndex++; 
+                        service.schedule(this, Long.parseLong(data.get(current).get(2)), TimeUnit.MILLISECONDS); 
                     }
 
                 }    

@@ -7,7 +7,7 @@ ALPINE_TAR=alpine-minirootfs.tar.gz
 ROOT_FS=client.img
 MOUNTPOINT=/media/ext4disk
 IMAGE_SIZE_MB=400
-
+DATE=`date +"%y%m%d %T"`
 ESCALATE_CMD=sudo
 
 .DELETE_ON_ERROR:
@@ -22,7 +22,7 @@ clean:
 $(ALPINE_TAR):
 	curl -L -o "$@" "https://nl.alpinelinux.org/alpine/v$(ALPINE_MAJOR)/releases/$(ALPINE_ARCH)/alpine-minirootfs-$(ALPINE_VERSION)-$(ALPINE_ARCH).tar.gz"
 
-client.jar: client.jar
+processor.jar : processor.jar
 
 $(ROOT_FS): $(ALPINE_TAR) buildenv.sh build/libs/processor.jar
 	dd if=/dev/zero of="$@" count=$(IMAGE_SIZE_MB) bs=1M
@@ -37,13 +37,11 @@ $(ROOT_FS): $(ALPINE_TAR) buildenv.sh build/libs/processor.jar
 		mkdir -p $(MOUNTPOINT)/resources; \
 		cp build/libs/processor.jar $(MOUNTPOINT)/app; \
 		cp resources/SecureHiveClient.pkcs12 $(MOUNTPOINT)/resources; \
+		date +"%y%m%d %T" -s "$(DATE)"; \
 		mkdir -p $(MOUNTPOINT)/opt; \
 		chroot $(MOUNTPOINT) /bin/sh /usr/sbin/buildenv.sh; \
 		umount $(MOUNTPOINT); \
 		chown $(USER) "$@"; \
 	'
 
-test: $(ROOT_FS)
-	echo "Running java Hello World example:"
-	~/SGX/sgx-lkl/tools/sgx-lkl-java ${CURDIR}/$(ROOT_FS) -jar processor.jar
 

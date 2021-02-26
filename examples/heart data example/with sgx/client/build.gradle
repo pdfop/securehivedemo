@@ -8,7 +8,7 @@ maven { url 'https://jitpack.io' }
    		
 }
 dependencies {  
-  compile files('/home/pd/securehive/cleanup/securehive/build/libs/securehive.jar')
+  compile files('../../../../securehive/build/libs/securehive.jar')
 }
 jar {
     manifest {

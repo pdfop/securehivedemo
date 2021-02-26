@@ -5,7 +5,7 @@ Code in proxy/ runs on a untrusted processing node outside of the enclave, it es
 Code in client/ runs on a untrusted processing node inside an enclave using sgx-lkl. it implements the processing logic for arriving notifications it receives from the proxy and creates encrypted commands that it passes to the proxy to publish  
 
 Data is taken from a real data set available at:   
-One sensor sends 400 data packets to the enclave  
+One sensor sends 450 data packets to the enclave  
 the data rate is dependent on the qt interval value in the data sample, simulating sending data each time a heartbeat is recorded (resulting in sending rates of ~60-100 messages / minute)  
 
 Data Format:  
