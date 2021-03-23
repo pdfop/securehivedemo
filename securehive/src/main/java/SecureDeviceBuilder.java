@@ -8,13 +8,13 @@ public class SecureDeviceBuilder
 {
     /**
      * Overloaded build method to construct a SecureDevice from a configuration file in the default location. 
-     * Default location: ../resources/SecureDevice.config
+     * Default location: resources/SecureDevice.config
      * Will assume default values for any Parameters not specified in the file. 
      * These default values are:
      * attest : false 
-     * storePath : ../resources/SecureHiveDevice.pkcs12
+     * storePath : resources/SecureHiveDevice.pkcs12
      * storePass : changeit 
-     * iasCertPath : ../resources/iasCert.der
+     * iasCertPath : resources/iasCert.der
      * attestationServer : 10.0.1.1:56000
      * noneTimeout : 500 
      */
@@ -29,9 +29,9 @@ public class SecureDeviceBuilder
      * Will assume default values for any Parameters not specified in the file. 
      * These default values are:
      * attest : false 
-     * storePath : ../resources/SecureHiveDevice.pkcs12
+     * storePath : resources/SecureHiveDevice.pkcs12
      * storePass : changeit 
-     * iasCertPath : ../resources/iasCert.der
+     * iasCertPath : resources/iasCert.der
      * attestationServer : 10.0.1.1:56000
      * noneTimeout : 500 
      */
