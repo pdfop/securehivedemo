@@ -110,7 +110,7 @@ public class Main
                         long end = System.nanoTime();  
                         int current = timerIndex.getAndIncrement(); 
                         times.set(current, TimeUnit.NANOSECONDS.toMillis(end - times.get(current))); 
-                        System.out.println(current);             
+            
                     }
                     catch(Exception e)
                     {

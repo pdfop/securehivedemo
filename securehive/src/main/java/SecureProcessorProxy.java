@@ -6,6 +6,8 @@ import com.google.gson.Gson.*;
 import com.google.gson.*; 
 import java.io.IOException; 
 import java.util.List;
+import java.util.ArrayList; 
+
 import com.github.devicehive.client.model.DeviceNotification;
 import com.github.devicehive.client.model.DeviceNotificationsCallback;
 import com.github.devicehive.client.model.FailureData;
@@ -65,7 +67,7 @@ public class SecureProcessorProxy
             } 
         }; 
         builder.registerTypeAdapter(DateTime.class, dateTimeDeserializer);
-
+        builder.setLenient();
         gson = builder.create(); 
         out = SocketChannel.open(); 
         in = SocketChannel.open(); 
@@ -111,10 +113,14 @@ public class SecureProcessorProxy
             {
                 try
                 {
-                    DeviceCommandWrapper wrapper = receiveCommand(); 
-                    if(wrapper != null)
+                    List<DeviceCommandWrapper> wrappers = receiveCommand(); 
+                    if(wrappers != null)
                     {
-                        device.sendCommand(wrapper.commandName, wrapper.parameters); 
+                        for(DeviceCommandWrapper wrapper : wrappers)
+                        {
+                            device.sendCommand(wrapper.commandName, wrapper.parameters); 
+                        }
+                       
                     }
                 }
                 catch(Exception e)
@@ -123,7 +129,7 @@ public class SecureProcessorProxy
                 }
             }             
         };
-        service.scheduleAtFixedRate(poll, 0L, 3L, TimeUnit.MILLISECONDS);
+        service.scheduleAtFixedRate(poll, 0L, 5L, TimeUnit.MILLISECONDS);
 
     }
 
@@ -132,33 +138,68 @@ public class SecureProcessorProxy
      */
     public void passNotification(DeviceNotification notification) throws Exception
     {
-        ByteBuffer bytes = StandardCharsets.UTF_8.encode(gson.toJson(notification)); 
-        while(bytes.hasRemaining())
+        try 
         {
-            out.write(bytes);
-        } 
+
         
+            ByteBuffer bytes = StandardCharsets.UTF_8.encode(gson.toJson(notification)); 
+            ByteBuffer count = ByteBuffer.allocate(4); 
+            count.putInt(bytes.limit());  
+            count.position(0); 
+            while(count.hasRemaining())
+            {
+                out.write(count); 
+            }
+            while(bytes.hasRemaining())
+            {
+                out.write(bytes);
+            } 
+        }
+        catch(Exception e)
+        {
+            System.out.println(e.getMessage());
+        }    
     }
 
     /**
      * Read a DeviceCommandWrapper from the in stream and return it to the caller. 
      * Note that this call is blocking until it has read a response from the enclave.
      */
-    public DeviceCommandWrapper receiveCommand() throws Exception
+    public List<DeviceCommandWrapper> receiveCommand()
     {     
-         
-        int read = in.read(buffer); 
-        if(read > 0)
-        {
-            String s = new String(java.util.Arrays.copyOfRange(buffer.array(),0 ,read)); 
-            buffer.clear(); 
-            return gson.fromJson(s.trim(), DeviceCommandWrapper.class);  
+       try
+       {
+            int read = in.read(buffer); 
+            if(read > 4)
+            {
+                int current = 0; 
+                List<DeviceCommandWrapper> commands = new ArrayList<>(); 
+                buffer.position(0); 
+                while(current < read)
+                {              
+                    int size = buffer.getInt(); 
+                    current = current + 4; 
+                    String s = new String(java.util.Arrays.copyOfRange(buffer.array(),current, current+size)); 
+                    current = current + size; 
+                    buffer.position(current); 
+                    commands.add(gson.fromJson(s.trim(), DeviceCommandWrapper.class));  
 
-        }
-        else
-        {
-            return null; 
-        }
+                }
+                buffer.clear(); 
+                return commands; 
+
+            }
+            else
+            {
+                return null; 
+            }
+       }
+       catch(Exception e)
+       {
+           System.out.println(e.getMessage());
+	   e.printStackTrace(System.out);
+           return null;
+       }
 
          
     }
@@ -183,7 +224,8 @@ public class SecureProcessorProxy
                         // after this notification is passed the keyexchange is complete 
                         if(notif.getNotification().equals("$keyexchange"))
                         {
-                            passNotification(notif);
+                            ByteBuffer bytes = StandardCharsets.UTF_8.encode(gson.toJson(notif)); 
+                            out.write(bytes); 
                             // unsubscribe from key exchange related notifications, 
                             device.unsubscribeAllNotifications();
                             // subscribe to the data notifications
@@ -194,11 +236,12 @@ public class SecureProcessorProxy
                         else
                         {
                             // pass notification and await response 
-                            passNotification(notif); 
-                            DeviceCommandWrapper response = receiveCommand();
+                            ByteBuffer bytes = StandardCharsets.UTF_8.encode(gson.toJson(notif)); 
+                            out.write(bytes); 
+                            List<DeviceCommandWrapper> response = receiveCommand();
                             if(response != null) 
                             {
-                                device.sendCommand(response.commandName, response.parameters); 
+                                device.sendCommand(response.get(0).commandName, response.get(0).parameters); 
                             }
 
                         }

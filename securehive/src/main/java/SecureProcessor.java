@@ -13,7 +13,8 @@ import java.util.List;
 import java.util.ArrayList; 
 import java.util.Hashtable;
 import java.util.Map;
-import java.util.Base64; 
+import java.util.Base64;
+import java.util.Random;  
 
 
 import java.security.cert.Certificate; 
@@ -73,7 +74,7 @@ public class SecureProcessor
     // message encryption
     private SecretKey messageKey; 
 
-    private ByteBuffer buffer = ByteBuffer.allocate(8192);
+    private ByteBuffer buffer = ByteBuffer.allocate(4096);
 
     // encoding 
     private static Base64.Decoder decoder = Base64.getDecoder(); 
@@ -83,7 +84,6 @@ public class SecureProcessor
  
     public void init(int port) throws Exception
     { 
-        System.out.println("init server");
         initSecurity(); 
         GsonBuilder builder = new GsonBuilder(); 
         JsonSerializer<DateTime> dateTimeSerializer = new JsonSerializer<DateTime>()
@@ -111,9 +111,12 @@ public class SecureProcessor
 
         serverSocket = ServerSocketChannel.open(); 
         serverSocket.socket().bind(new InetSocketAddress(port)); 
+	    System.out.println("Processor initialized. Waiting for connection...");
         out = serverSocket.accept();
         out.configureBlocking(false); 
         in = serverSocket.accept();
+        in.configureBlocking(true); 
+        System.out.println("Connected");
         keyExchange(); 
         receiveNotifications(); 
     }
@@ -197,8 +200,9 @@ public class SecureProcessor
      */
     private String generateNonce()
     {
-        DateTime nonce = DateTime.now(); 
-        return nonce.toString();     
+        byte[] array = new byte[15];
+        new Random().nextBytes(array);
+        return new String(array, Charset.forName("UTF-8"));    
     }
 
     /**
@@ -227,10 +231,7 @@ public class SecureProcessor
         return decryptedParameters; 
     }
 
-
-
-
-        /**
+     /**
          * Read a DeviceNotification from the in stream and process it 
          * This method loops until the Stream is closed or null is written to it 
          * The reading process is blocking until a DeviceNotification has been read. 
@@ -238,13 +239,28 @@ public class SecureProcessor
         private void receiveNotifications() throws Exception
         {
             DeviceNotificationWrapper notification; 
-            int bytesRead = 0;  
-            while((bytesRead = in.read(buffer)) > 0)
+            int read = 0;  
+            while((read = in.read(buffer)) > 0)
             {
-                String s = new String(java.util.Arrays.copyOfRange(buffer.array(), 0 , bytesRead));
-                buffer.clear();  
-                notification = gson.fromJson(s.trim(), DeviceNotificationWrapper.class); 
-                process(notification); 
+                int current = 0; 
+                if(read > 4)
+                {  
+                    buffer.position(0); 
+                    while(current < read)
+                    {
+                        int size = buffer.getInt(); 
+                        current = current + 4; 
+                        byte[] dest = new byte[size]; 
+                        buffer.get(dest,0,size); 
+                        String s = new String(dest, StandardCharsets.UTF_8); 
+                        current = current + size; 
+                        buffer.position(current); 
+                        notification = gson.fromJson(s.trim(), DeviceNotificationWrapper.class);
+                        process(notification); 
+
+                    }   
+                    buffer.clear(); 
+                }
             }
         }
 
@@ -252,11 +268,18 @@ public class SecureProcessor
          * Pass a DeviceCommandWrapper to the out stream. 
          * @see DeviceCommandWrapper for an explanation of why this expects and writes a Wrapper  
          */
-        public void sendCommand(DeviceCommandWrapper command) throws IOException
+        public void sendCommand(DeviceCommandWrapper command)
         {
             try
             {  
-                ByteBuffer bytes = StandardCharsets.UTF_8.encode(gson.toJson(command)); 
+                ByteBuffer bytes = StandardCharsets.UTF_8.encode(gson.toJson(command));
+                ByteBuffer count = ByteBuffer.allocate(4); 
+                count.putInt(bytes.limit()); 
+                count.position(0); 
+                while(count.hasRemaining())
+                {
+                    out.write(count);
+                }
                 while(bytes.hasRemaining())
                 {
                     out.write(bytes);

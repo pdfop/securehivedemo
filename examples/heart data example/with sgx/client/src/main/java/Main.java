@@ -31,11 +31,15 @@ public class Main
         @Override 
         public void process(DeviceNotificationWrapper notification) throws Exception
         {  
+            try
+            {
+
+            
                 List<Parameter> response = new ArrayList<Parameter>(); 
                 JsonObject parameters = getDecryptedParameters(notification); 
 
                 Parameter hr = new Parameter("heartrate", ""); 
-                Parameter lqts = new Parameter("lqts", ""); 
+                Parameter lqts = new Parameter("lqts", "");   
                 int qt = parameters.get("qt").getAsInt(); 
                 int rr = parameters.get("rr").getAsInt();
                 double lqtsValue = qt/Math.sqrt(rr);
@@ -50,7 +54,13 @@ public class Main
                 hr.setValue(String.valueOf(60/((double)rr/1000))); 
                 response.add(lqts);
                 response.add(hr); 
-                sendCommand(encryptedCommand("response", response));                 
+                sendCommand(encryptedCommand("response", response));      
+            }
+            
+            catch(Exception e)
+            {
+                System.out.println(e.getMessage());  
+            }   
         }
     }
 }

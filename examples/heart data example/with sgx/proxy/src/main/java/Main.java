@@ -15,8 +15,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList; 
 import java.util.Arrays;
-//import java.util.Map; 
-//import java.util.Hashtable; 
 
 public class Main {
 
@@ -27,10 +25,8 @@ public class Main {
     private static DeviceHive client; 
     // Devices managed by this Host App 
     List<String> deviceIds; 
-   // Map<String, Device> devices = new Hashtable<String, Device>();
     // proxy connection
-    //Map<String, SecureProcessorProxy> proxies = new Hashtable<String, SecureProcessorProxy>(); 
-    private final String enclaveIP = "10.0.1.1"; 
+    private final String enclaveIP = "127.0.0.1"; 
     private final int port = 6767; 
 
 
@@ -53,14 +49,12 @@ public class Main {
                 return; 
             }
             Device device = response.getData();
-            //devices.put(deviceId, device); 
 
             NotificationFilter filter = new NotificationFilter(); 
             filter.setNotificationNames("data"); 
             filter.setStartTimestamp(DateTime.now()); 
             filter.setEndTimestamp(DateTime.now());
             SecureProcessorProxy proxy = SecureProcessorProxyBuilder.build(device, filter, enclaveIP, port); 
-            //proxies.put(deviceId,proxy); 
 
         }
     }

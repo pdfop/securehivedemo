@@ -8,15 +8,14 @@ public class SecureDeviceBuilder
 {
     /**
      * Overloaded build method to construct a SecureDevice from a configuration file in the default location. 
-     * Default location: ../resources/SecureDevice.config
+     * Default location: resources/SecureDevice.config
      * Will assume default values for any Parameters not specified in the file. 
      * These default values are:
      * attest : false 
-     * storePath : ../resources/SecureHiveDevice.pkcs12
+     * storePath : resources/SecureHiveDevice.pkcs12
      * storePass : changeit 
-     * iasCertPath : ../resources/iasCert.der
+     * iasCertPath : resources/iasCert.pem
      * attestationServer : 10.0.1.1:56000
-     * noneTimeout : 500 
      */
     public static SecureDevice build(Device device) throws Exception
     {
@@ -29,11 +28,10 @@ public class SecureDeviceBuilder
      * Will assume default values for any Parameters not specified in the file. 
      * These default values are:
      * attest : false 
-     * storePath : ../resources/SecureHiveDevice.pkcs12
+     * storePath : resources/SecureHiveDevice.pkcs12
      * storePass : changeit 
-     * iasCertPath : ../resources/iasCert.der
+     * iasCertPath : resources/iasCert.pem
      * attestationServer : 10.0.1.1:56000
-     * noneTimeout : 500 
      */
     public static SecureDevice build(Device device, String configPath) throws Exception
     {
@@ -41,9 +39,8 @@ public class SecureDeviceBuilder
         boolean attest = false; 
         String storePass = "changeit";  
         String storePath = "resources/SecureHiveDevice.pkcs12"; 
-        String iasCertPath = "resources/iasCert.der"; 
+        String iasCertPath = "resources/iasCert.pem"; 
         String attestationServer = "10.0.1.1/56000";  
-        int nonceTimeout = 500; 
 
         try (BufferedReader br = new BufferedReader(new FileReader(configPath))) 
         {
@@ -68,9 +65,6 @@ public class SecureDeviceBuilder
                     case "attestationServer":
                         attestationServer = split[1]; 
                         break;
-                    case "nonceTimeout":
-                        nonceTimeout = Integer.parseInt(split[1]); 
-                        break;
                     default:
                         break; 
 
@@ -82,17 +76,17 @@ public class SecureDeviceBuilder
             // if file reading failed assume default values
         } 
         return new SecureDevice(device, attest, storePass,
-        storePath, iasCertPath, attestationServer, nonceTimeout); 
+        storePath, iasCertPath, attestationServer); 
     }
 
     /**
      * Overloaded build method to construct a SecureDevice from its constructor parameters. 
      */
     public static SecureDevice build(Device device, boolean attest, String storePass,
-     String storePath, String iasCertPath, String attestationServer, int nonceTimeout) throws Exception
+     String storePath, String iasCertPath, String attestationServer) throws Exception
     {
         return new SecureDevice(device, attest, storePass,
-         storePath, iasCertPath, attestationServer, nonceTimeout); 
+         storePath, iasCertPath, attestationServer); 
     }
 
 }

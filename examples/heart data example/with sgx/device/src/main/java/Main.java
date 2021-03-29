@@ -152,9 +152,6 @@ public class Main
                     times.add(start);
                     // encrypt and publish the notification 
                     secureDevice.sendEncryptedNotification("data", params);
-                    // addtional statistic for the length of just the creation, encryption and sending time, relevant for comparison with homomorphic encyption
-                    //encTimes.add(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
-                    
                 } 
                 catch(Exception e)
                 {

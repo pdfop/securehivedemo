@@ -34,12 +34,10 @@ public class Main {
     private static final String accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxNzE0MTYwMDAwMCwidCI6MSwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.07-pTHlWIvEEi5lWCU6-dVe2is6eB1fwrTTFv1ssMoM";
     private static final String refreshToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxNzE0MTYwMDAwMCwidCI6MCwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.16ocpHfZA11AE-3xXXxK4Y5Ld9pmXql7XFD8CgT5dAE";
     private static DeviceHive client; 
-    // Devices managed by this Host App 
-    List<String> deviceIds; 
     // proxy connection
     // ** additional parameters for the proxy connection ** 
     private final String enclaveIP = "10.0.1.1"; 
-    private static final int[] ports = {6767,6768,6769}; 
+    private static final int port = 6767; 
 
 
     public static void main(String[] args) throws IOException
@@ -51,8 +49,7 @@ public class Main {
     private void init(List<String> deviceIds) throws IOException
     {
         //Initiating DeviceHive
-        client = DeviceHive.getInstance().init(URL, refreshToken, accessToken);
-        deviceIds = deviceIds; 
+        client = DeviceHive.getInstance().init(URL, refreshToken, accessToken); 
         for(String deviceId : deviceIds)
         {
             DHResponse<Device> response = client.getDevice(deviceId); 
@@ -67,7 +64,7 @@ public class Main {
             filter.setStartTimestamp(DateTime.now()); 
             filter.setEndTimestamp(DateTime.now());
 	        // ** creation of a proxy ** 
-            SecureProcessorProxy proxy = SecureProcessorProxyBuilder.build(device, filter, enclaveIP, ports[deviceIds.indexOf(deviceId)]); 
+            SecureProcessorProxy proxy = SecureProcessorProxyBuilder.build(device, filter, enclaveIP, port); 
 
         }
     }

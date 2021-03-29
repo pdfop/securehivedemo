@@ -28,6 +28,11 @@ import org.joda.time.Duration;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonElement; 
 
+import com.google.common.hash.BloomFilter; 
+import com.google.common.hash.Funnels;
+
+import java.nio.charset.StandardCharsets;
+
 /**
  * This class is an Implementation of DeviceInterface with additional methods rather than a subclass of Device 
  * This is done to preserve the original state of the Device Class 
@@ -42,7 +47,7 @@ public class SecureDevice
     private PrivateKey deviceSK;
     // encryption
     private SecretKey messageKey;  
-    private Duration NONCE_TIMEOUT;  
+    private BloomFilter<String> nonces;  
     // contains certificatates 
     private KeyStore store;
     private final String storePath; 
@@ -66,7 +71,7 @@ public class SecureDevice
      * Create a new SecureDevice
      * To be called by the SecureDeviceBuilder
      */
-    protected SecureDevice(Device device, boolean attest, String storePass, String storePath, String iasCertPath, String attestationServer, int nonceTimeout) throws Exception
+    protected SecureDevice(Device device, boolean attest, String storePass, String storePath, String iasCertPath, String attestationServer) throws Exception
     {
         this.device = device; 
         this.deviceId = device.getName(); 
@@ -74,7 +79,7 @@ public class SecureDevice
         this.iasCertPath = iasCertPath; 
         this.attestationServer = attestationServer; 
         this.storePath = storePath; 
-        this.NONCE_TIMEOUT = new Duration(nonceTimeout); 
+        this.nonces = BloomFilter.create(Funnels.stringFunnel(StandardCharsets.UTF_8), 5000, 0.01);
         initSecurity(); 
         if(attest)
         {
@@ -287,20 +292,23 @@ public class SecureDevice
     {
         loadAttestationKeys(); 
         int code = 1;
-        String[] config = {"sgx-lkl-ctl",
-         "attest",
-          "--server=" + attestationServer,
-           "--ias-spid=" + SPID,
-            "--ias-quote-type=1",
-              "--ias-skey=" + iasSKey,
-               "--mrenclave=" + MRENCLAVE,
-                "--mrsigner=" + MRSIGNER,
-                  "--ias-sign-ca-cert=" + iasCertPath};
-        ProcessBuilder pb = new ProcessBuilder(config); 
+        String[] config ={"sgx-lkl-ctl" , 
+         "attest" ,
+          "--server=" + attestationServer ,
+           "--ias-spid=" + SPID ,
+            "--ias-quote-type=1" ,
+              "--ias-skey=" + iasSKey ,
+               "--mrenclave=" + MRENCLAVE ,
+                "--mrsigner=" + MRSIGNER ,
+                  "--ias-sign-ca-cert=" + iasCertPath};	
+
         try
         {
+	        ProcessBuilder pb = new ProcessBuilder(config); 
+            pb.inheritIO();
             Process attestation = pb.start(); 
-            code = attestation.waitFor();     
+            attestation.waitFor();
+	        code = attestation.exitValue();  
         }
         catch(InterruptedException | IOException | IllegalThreadStateException e)
         {
@@ -309,12 +317,13 @@ public class SecureDevice
         if(code == 0)
         {
             attested = true;
+	        System.out.println("Remote Attestation successful"); 
         }
         else
         {
             secure = false; 
             attested = false;
-            System.out.println("Remote Attestation Failed"); 
+            System.out.println("Remote Attestation failed"); 
         }
     }
 
@@ -364,18 +373,8 @@ public class SecureDevice
             }
             if(entry.getKey().equals("nonce"))
             {
-                DateTime nonce = DateTime.parse(new String(decrypt.doFinal(decoder.decode(entry.getValue().getAsString()))));   
-                if(new Duration(nonce, command.getTimestamp()).isLongerThan(NONCE_TIMEOUT))
-                {
-                    // usually I would want to return null and and react to the command in this case 
-                    // for now nothing is going to happen, until I can find a working solution
-                    // the problem is that the enclave is unable to get a valid timer to create the nonce timestamp 
-                    // even when setting the correct system time for the alpine image 
-                    // depending on lkl's possibilities it might be necessary to come up with another way of using nonces e.g. actual random values 
-                    // however this would likely be a lot more complex as nonces have to be tracked on both sides 
-                    // TODO: FIX NONCE 
-                    //return null;  
-                }
+                continue; 
+
             } 
             else
             {
@@ -386,6 +385,11 @@ public class SecureDevice
         }
         return decryptedParameters; 
     }
+
+    /**
+     * all functions from here on relay calls to the implementation of the function in the underlying device
+     * this allows SecureDevices to act as regular Devices
+     */
 
     public void save()
     {
