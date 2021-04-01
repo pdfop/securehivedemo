@@ -43,24 +43,35 @@ import org.joda.time.Duration;
 public class Main
 {	
     // Devicehive Setup 
-    static final String URL = "http://desktop-nedtc0v.fritz.box/api/rest"; 
-    private static final String accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxNzE0MTYwMDAwMCwidCI6MSwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.07-pTHlWIvEEi5lWCU6-dVe2is6eB1fwrTTFv1ssMoM";
-    private static final String refreshToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxNzE0MTYwMDAwMCwidCI6MCwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.16ocpHfZA11AE-3xXXxK4Y5Ld9pmXql7XFD8CgT5dAE";
+    private static final String URL = "http://desktop-nedtc0v.fritz.box/api/rest"; 
+    private static final String accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYyMjQ5ODQwMDAwMCwidCI6MSwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.-Yl8WQBLe7Eoslk6dLT5I9_P3YrpUnTeq9MqNmMl6Fo";
+    private static final String refreshToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYyMjQ5ODQwMDAwMCwidCI6MCwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.8qOxIByZ4D-idsOBfrgA-s8ZAEosxJaJ-LGlazpIRhA";
     private static final String deviceId = "Taxi"; 
-    private static Device device; 
-    private static HomomorphicDevice secureDevice;
-    private static List<Long> times = new ArrayList<Long>();
-    private static List<Long> encTimes = new ArrayList<Long>(); 
-    private static int timerIndex = 0; 
-    private static int responseCounter = 0;  
-    private static AtomicInteger dataIndex = new AtomicInteger(0);
-    private static List<List<String>> data = new ArrayList<>(); 
+    private Device device; 
+    private HomomorphicDevice secureDevice;
+    private List<Long> times = new ArrayList<Long>();
+    private List<Long> encTimes = new ArrayList<Long>(); 
+    private int timerIndex = 0; 
+    private int responseCounter = 0;  
+    private AtomicInteger dataIndex = new AtomicInteger(0);
+    private List<List<String>> data = new ArrayList<>(); 
 
-    private static DateTimeFormatter formatter = DateTimeFormat.forPattern("yyyy-mm-dd H:m:s");
+    private DateTimeFormatter formatter = DateTimeFormat.forPattern("yyyy-mm-dd H:m:s");
+    ScheduledExecutorService service = Executors.newScheduledThreadPool(2);
     
     public static void main(String[] args) throws InterruptedException, IllegalThreadStateException, Exception
     {
+        String deviceIdInput= args[0];
+        Main main = new Main(); 
+        main.init_device(deviceIdInput);  
+        main.subscribeCommands();
+        main.loadData();
+        main.generateAndSendData(); 
+        main.sendRequests();         
+    }
 
+    private void init_device(String deviceId) throws Exception
+    {
         final DeviceHive client = DeviceHive.getInstance().init(URL, refreshToken, accessToken);
         DHResponse<Device> deviceResponse = client.getDevice(deviceId);
         if (!deviceResponse.isSuccessful())
@@ -70,9 +81,10 @@ public class Main
         }
         device = deviceResponse.getData();
         secureDevice = new HomomorphicDevice(device); 
-        subscribeCommands();
-        loadData();     
-        ScheduledExecutorService service = Executors.newScheduledThreadPool(1);
+    }
+
+    private void generateAndSendData()
+    {
         Callable<Void> sendData = new Callable<Void>() 
         {
             public Void call() 
@@ -84,22 +96,14 @@ public class Main
                     List<String> line = data.get(current); 
                     params.add(new Parameter("pickup-time", line.get(0))); 
                     params.add(new Parameter("dropoff-time", line.get(1))); 
-    
+
                     params.add(new Parameter("$pickup-location", line.get(3))); 
                     params.add(new Parameter("$dropoff-location", line.get(4))); 
-    
+
                     params.add(new Parameter("$distance", line.get(2))); 
                     params.add(new Parameter("$cost", line.get(5))); 
-    
-                    secureDevice.sendEncryptedNotification("data", params);
 
-                    if(current > 10 && current % 10 == 0)
-                    {
-                        List<Parameter> req = new ArrayList<>(); 
-                        req.add(new Parameter("test", "test")); 
-                        secureDevice.sendEncryptedNotification("request", req); 
-                        times.add(System.nanoTime()); 
-                    }
+                    secureDevice.sendEncryptedNotification("data", params);
                 }
                 catch (Exception e)
                 {
@@ -120,56 +124,9 @@ public class Main
             }
         };
         service.schedule(sendData,0L, TimeUnit.MILLISECONDS);  
-
-
     }
-
-    private static void subscribeCommands() throws Exception
-    {
-        CommandFilter filter = new CommandFilter(); 
-        filter.setStartTimestamp(DateTime.now()); 
-        filter.setEndTimestamp(DateTime.now()); 
-        filter.setCommandNames("response"); 
-        final DeviceCommandsCallback callback = new DeviceCommandsCallback()
-        {
-            public void onSuccess(List<DeviceCommand> commands)
-            {
-                if(!(commands == null || commands.isEmpty()))
-                {
-                    for(DeviceCommand command : commands)
-                    {   
-                        try
-                        {
-                            long startdec = System.nanoTime(); 
-                            JsonObject parameters = secureDevice.getDecryptedParameters(command); 
-                            System.out.println(parameters);
-
-                            responseCounter++; 
-                            if(responseCounter % 5 == 0)
-                            {
-                                times.set(timerIndex, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - times.get(timerIndex))); 
-                                timerIndex++;
-                                System.out.println(times);  
-
-                            } 
-                        }
-                        catch(Exception e)
-                        {
-                            e.printStackTrace(System.out);
-                        }
-                    } 
-                }
-            }
-            public void onFail(FailureData fail)
-            {
-                System.out.println(fail); 
-            }
-        }; 
-        secureDevice.subscribeCommands(filter, callback); 
-
-    }
-
-    private static void loadData() throws Exception
+   
+    private void loadData() throws Exception
     {
         try (BufferedReader br = new BufferedReader(new FileReader("resources/" + deviceId + ".csv"))) 
         {
@@ -182,6 +139,93 @@ public class Main
         }
     }
 
+    private void subscribeCommands() throws Exception
+    {
+        CommandFilter filter = new CommandFilter(); 
+        filter.setStartTimestamp(DateTime.now()); 
+        filter.setEndTimestamp(DateTime.now()); 
+        filter.setCommandNames("response"); 
+        final DeviceCommandsCallback callback = new DeviceCommandsCallback()
+        {
+            public void onSuccess(List<DeviceCommand> commands)
+            {
+                for(DeviceCommand command : commands)
+                {   
+                    try
+                    {
+                        JsonObject parameters = secureDevice.getDecryptedParameters(command); 
+                    }
+                    catch(Exception e)
+                    {
+                        e.printStackTrace(System.out);
+                    }
+                }
+                responseCounter += commands.size(); 
+                if(responseCounter % 5 == 0)
+                {
+                    times.set(timerIndex, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - times.get(timerIndex))); 
+                    timerIndex++;
+                    System.out.println(times);
+                }
+                if(timerIndex > 30)
+                {
+                    try
+                    {
+                        System.out.println("Done"); 
+                        FileWriter writer = new FileWriter(deviceId +  ".txt"); 
+                        for (int i = 0; i < times.size(); i++)
+                        {
+                            long time = times.get(i);
+                            String dataString = String.valueOf(time) + "\n"; 
+                            writer.write(dataString);     
+                        }   
+                        writer.close(); 
+                        System.out.println("File Written"); 
+                    }
+                    catch(Exception e)
+                    {
+                        System.out.println(e.getMessage()); 
+                    }
+                }
+  
+            }
+            public void onFail(FailureData fail)
+            {
+                System.out.println(fail); 
+            }
+        }; 
+        secureDevice.subscribeCommands(filter, callback); 
 
-    
+    }
+
+    private void sendRequests()
+    {
+        // schedule the device to send a notification with variable delay 
+        Callable<Void> sendRequest = new Callable<Void>() {
+            public Void call() {
+                int current = dataIndex.getAndIncrement();
+                try 
+                {
+                    List<Parameter> req = new ArrayList<>(); 
+                    req.add(new Parameter("test", "test")); 
+                    secureDevice.sendEncryptedNotification("request", req); 
+                    times.add(System.nanoTime());   
+                } 
+                catch(Exception e)
+                {
+                    System.out.println(e.getMessage()); 
+
+                }
+                finally
+                {
+                    if(timerIndex <= 30)
+                    {
+                        service.schedule(this, 5L, TimeUnit.SECONDS);
+                    }                    
+                }    
+             return null;
+            }
+        };
+        service.schedule(sendRequest,60L, TimeUnit.SECONDS);
+    }    
 }   

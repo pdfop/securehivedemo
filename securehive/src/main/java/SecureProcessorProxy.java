@@ -118,14 +118,15 @@ public class SecureProcessorProxy
                     {
                         for(DeviceCommandWrapper wrapper : wrappers)
                         {
-                            device.sendCommand(wrapper.commandName, wrapper.parameters); 
+                            device.sendCommand(wrapper.commandName, wrapper.parameters);
                         }
                        
                     }
                 }
                 catch(Exception e)
                 {
-                    
+                    System.out.println(e.getMessage());
+                    e.printStackTrace(System.out);                    
                 }
             }             
         };
@@ -140,8 +141,6 @@ public class SecureProcessorProxy
     {
         try 
         {
-
-        
             ByteBuffer bytes = StandardCharsets.UTF_8.encode(gson.toJson(notification)); 
             ByteBuffer count = ByteBuffer.allocate(4); 
             count.putInt(bytes.limit());  
@@ -167,42 +166,74 @@ public class SecureProcessorProxy
      */
     public List<DeviceCommandWrapper> receiveCommand()
     {     
-       try
-       {
+        try
+        {
             int read = in.read(buffer); 
             if(read > 4)
             {
-                int current = 0; 
+                buffer.limit(buffer.position()); 
                 List<DeviceCommandWrapper> commands = new ArrayList<>(); 
+                int current = 0; 
                 buffer.position(0); 
-                while(current < read)
-                {              
-                    int size = buffer.getInt(); 
-                    current = current + 4; 
-                    String s = new String(java.util.Arrays.copyOfRange(buffer.array(),current, current+size)); 
-                    current = current + size; 
-                    buffer.position(current); 
-                    commands.add(gson.fromJson(s.trim(), DeviceCommandWrapper.class));  
+                int size;
 
+                while(current < buffer.limit())
+                {  
+                    size = buffer.getInt(); 
+                    current += 4; 
+                    if(current + size <= buffer.limit())
+                    {
+                        String s = new String(java.util.Arrays.copyOfRange(buffer.array(), current, current + size)); 
+                        current = current + size; 
+                        buffer.position(current); 
+                        commands.add(gson.fromJson(s.trim(), DeviceCommandWrapper.class)); 
+                    }
+
+                    else
+                    {
+                        current = current - 4;
+                        break; 
+                    }
                 }
-                buffer.clear(); 
-                return commands; 
+                if(current == buffer.limit())
+                {
+                    buffer.clear(); 
+                }
+
+                else
+                {
+                    byte[] copy = java.util.Arrays.copyOfRange(buffer.array(), current, buffer.limit()); 
+                    buffer.clear(); 
+                    buffer.put(copy); 
+                }
+
+                if(commands.size() > 0)
+                {
+                    return commands; 
+                }
+                
+                else
+                {
+                    return null; 
+                }
 
             }
+
             else
             {
                 return null; 
             }
-       }
-       catch(Exception e)
-       {
-           System.out.println(e.getMessage());
-	   e.printStackTrace(System.out);
-           return null;
-       }
 
-         
-    }
+        }
+        catch(Exception e)
+        {
+            System.out.println(e.getMessage());
+            e.printStackTrace(System.out);
+            return null;
+        }
+    } 
+
+      
 
     private void keyExchange()
     {

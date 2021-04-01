@@ -373,7 +373,17 @@ public class SecureDevice
             }
             if(entry.getKey().equals("nonce"))
             {
-                continue; 
+                String nonce = new String(decrypt.doFinal(decoder.decode(entry.getValue().getAsString()))); 
+                boolean contained = nonces.mightContain(nonce); 
+                if(contained)
+                {
+                    decryptedParameters.addProperty("nonce-status", "true");
+                } 
+                else
+                {
+                    decryptedParameters.addProperty("nonce-status", "false"); 
+                    nonces.put(nonce); 
+                }
 
             } 
             else

@@ -1,4 +1,4 @@
- import org.joda.time.DateTime; 
+import org.joda.time.DateTime; 
 import com.github.devicehive.client.model.DHResponse;
 import com.github.devicehive.client.model.FailureData;
 import com.github.devicehive.client.service.Device;
@@ -23,9 +23,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Main
 {
     // Devicehive server connection 
-    private static final String URL = "http://desktop-nedtc0v.fritz.box/api/rest"; 
-    private static final String accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxNzE0MTYwMDAwMCwidCI6MSwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.07-pTHlWIvEEi5lWCU6-dVe2is6eB1fwrTTFv1ssMoM";
-    private static final String refreshToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxNzE0MTYwMDAwMCwidCI6MCwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.16ocpHfZA11AE-3xXXxK4Y5Ld9pmXql7XFD8CgT5dAE";
+    private static final String URL = "http://20.67.42.189/api/rest"; 
+    private static final String accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxOTgyMDAwMDAwMCwidCI6MSwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.zjTBCAtTFqNMfLzW11Xqz44UJ5wPkM5j1AUW_6vzpew";
+    private static final String refreshToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxOTgyMDAwMDAwMCwidCI6MCwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.mMF61xlkbHblaSCwikU0m5J9s7hWDAzSAbuKpPkM0GQ";
     private DeviceHive client; 
     // single device to send notifications and receive commands 
     private Device device;
@@ -110,7 +110,7 @@ public class Main
                         long end = System.nanoTime();  
                         int current = timerIndex.getAndIncrement(); 
                         times.set(current, TimeUnit.NANOSECONDS.toMillis(end - times.get(current))); 
-            
+                        System.out.println(current); 
                     }
                     catch(Exception e)
                     {

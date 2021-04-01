@@ -108,6 +108,7 @@ public class ThreadedSecureProcessor
 
             SocketChannel out = server.accept();
             SocketChannel in = server.accept();
+            System.out.println("Connected."); 
             startThread(in,out); 
         }
     }
@@ -189,13 +190,28 @@ public class ThreadedSecureProcessor
         private void receiveNotifications() throws Exception
         {
             DeviceNotificationWrapper notification; 
-            int bytesRead = 0;  
-            while((bytesRead = in.read(buffer)) > 0)
+            int read = 0;  
+            while((read = in.read(buffer)) > 0)
             {
-                String s = new String(java.util.Arrays.copyOfRange(buffer.array(), 0 , bytesRead));
-                buffer.clear();  
-                notification = gson.fromJson(s.trim(), DeviceNotificationWrapper.class); 
-                process(notification); 
+                int current = 0; 
+                if(read > 4)
+                {  
+                    buffer.position(0); 
+                    while(current < read)
+                    {
+                        int size = buffer.getInt(); 
+                        current = current + 4; 
+                        byte[] dest = new byte[size]; 
+                        buffer.get(dest,0,size); 
+                        String s = new String(dest, StandardCharsets.UTF_8); 
+                        current = current + size; 
+                        buffer.position(current); 
+                        notification = gson.fromJson(s.trim(), DeviceNotificationWrapper.class);
+                        process(notification); 
+
+                    }   
+                    buffer.clear(); 
+                }
             }
         }
 
@@ -203,7 +219,7 @@ public class ThreadedSecureProcessor
          * Pass a DeviceCommandWrapper to the out stream. 
          * @see DeviceCommandWrapper for an explanation of why this expects and writes a Wrapper  
          */
-        public void sendCommand(DeviceCommandWrapper command) throws IOException
+        public void sendCommand(DeviceCommandWrapper command)
         {
             try
             {  
@@ -215,7 +231,6 @@ public class ThreadedSecureProcessor
                 {
                     out.write(count);
                 }
-                  
                 while(bytes.hasRemaining())
                 {
                     out.write(bytes);
