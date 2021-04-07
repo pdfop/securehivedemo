@@ -36,7 +36,7 @@ public class Main
 
             
                 List<Parameter> response = new ArrayList<Parameter>(); 
-                JsonObject parameters = getDecryptedParameters(notification); 
+                JsonObject parameters = notification.getParameters(); 
 
                 Parameter hr = new Parameter("heartrate", ""); 
                 Parameter lqts = new Parameter("lqts", "");   

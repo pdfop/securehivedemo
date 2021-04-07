@@ -53,7 +53,7 @@ public class Main
             @Override
             public void process(DeviceNotificationWrapper notification) throws Exception
             {
-                JsonObject parameters = getDecryptedParameters(notification);
+                JsonObject parameters = notification.getParameters(); 
                 int speedDiff = parameters.get("speed").getAsInt() - speedlimit;
                 boolean speeding = speedDiff > 0; 
  
@@ -61,7 +61,6 @@ public class Main
                 {
                     List<Parameter> response = new ArrayList<>(); 
                     response.add(new Parameter("license-plate", parameters.get("license-plate").getAsString())); 
-                    response.add(new Parameter("speeding", Boolean.toString(speeding)));
                     response.add(new Parameter("time", parameters.get("time").getAsString())); 
                     response.add(new Parameter("over-limit", String.valueOf(speedDiff))); 
                     sendCommand(encryptedCommand("response", response));  

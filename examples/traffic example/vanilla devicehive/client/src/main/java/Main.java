@@ -119,7 +119,6 @@ public class Main {
             {
                 List<Parameter> response = new ArrayList<>(); 
                 response.add(new Parameter("license-plate", parameters.get("license-plate").getAsString())); 
-                response.add(new Parameter("speeding", Boolean.toString(speeding)));
                 response.add(new Parameter("time", parameters.get("time").getAsString())); 
                 response.add(new Parameter("over-limit", String.valueOf(speedDiff))); 
                 device.sendCommand("response", response); 

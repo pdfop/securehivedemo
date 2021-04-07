@@ -51,7 +51,7 @@ public class Main
         {
             if(notification.getNotification().equals("data"))
             {            
-                JsonObject parameters = getDecryptedParameters(notification); 
+                JsonObject parameters = notification.getParameters(); 
                 Trip trip = new Trip(); 
                 trip.pickupLocation = parameters.get("pickup-location").getAsString();
                 trip.dropoffLocation = parameters.get("dropoff-location").getAsString();
@@ -88,7 +88,6 @@ public class Main
                 List<Entry<String,CounterEntry>> list = new ArrayList<>(routes.entrySet());
                 list.sort(Entry.comparingByValue());
                 Collections.reverse(list);
-                //System.out.println("Unique Entries: " + String.valueOf(list.size())); 
                 for(int i =  0; i < Math.min(list.size(), 5); i++)
                 {
                     Entry<String,CounterEntry> entry = list.get(i); 

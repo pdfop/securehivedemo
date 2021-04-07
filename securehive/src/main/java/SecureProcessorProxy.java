@@ -32,10 +32,10 @@ public class SecureProcessorProxy
     private ByteBuffer buffer = ByteBuffer.allocate(8192);
 
     // the devices communicating through this proxy
-    Device device; 
+    private Device device; 
     // the filter and callback for the device
-    NotificationFilter filter; 
-    DeviceNotificationsCallback callback;  
+    private NotificationFilter filter; 
+    private DeviceNotificationsCallback callback;  
 
     
     /**
@@ -231,9 +231,7 @@ public class SecureProcessorProxy
             e.printStackTrace(System.out);
             return null;
         }
-    } 
-
-      
+    }      
 
     private void keyExchange()
     {

@@ -30,8 +30,8 @@ public class Main
         @Override 
         public void process(DeviceNotificationWrapper notification) throws Exception
         {  
-                JsonObject parameters = getDecryptedParameters(notification); 
-                System.out.println("Received notification after attestation and key exchange");                
+            JsonObject parameters = notification.getParameters(); 
+            System.out.println("Received notification after attestation and key exchange");                
         }
     }
 }

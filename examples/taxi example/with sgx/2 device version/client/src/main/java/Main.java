@@ -91,7 +91,7 @@ public class Main
         @Override
         public void process(DeviceNotificationWrapper notification) throws Exception
         {
-            JsonObject parameters = getDecryptedParameters(notification); 
+            JsonObject parameters = notification.getParameters();  
             Trip trip = new Trip(); 
             trip.pickupLocation = parameters.get("pickup-location").getAsString();
             trip.dropoffLocation = parameters.get("dropoff-location").getAsString();

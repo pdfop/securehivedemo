@@ -210,9 +210,14 @@ public class SecureProcessor
      * Expects the Parameters to include a key "iv" to be used to initialize the decryption cipher
      * @returns a JsonObject of the decrypted parameters of a DeviceNotification, equivalent to DeviceNotification.getParameters() 
      */
-    public JsonObject getDecryptedParameters(DeviceNotificationWrapper notification) throws Exception
+    public void decrypt(DeviceNotificationWrapper notification) throws Exception
     {
         JsonObject parameters = notification.getParameters();  
+        if(parameters == null)
+        {
+            return; 
+        }
+
         JsonObject decryptedParameters = new JsonObject(); 
         Cipher decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding"); 
         IvParameterSpec iv = new IvParameterSpec(decoder.decode(parameters.get("iv").getAsString()));
@@ -228,7 +233,7 @@ public class SecureProcessor
                 new String(decrypt.doFinal(decoder.decode(entry.getValue().getAsString())))
             ); 
         } 
-        return decryptedParameters; 
+        notification.setParameters(decryptedParameters);  
     }
 
      /**
@@ -256,8 +261,8 @@ public class SecureProcessor
                         current = current + size; 
                         buffer.position(current); 
                         notification = gson.fromJson(s.trim(), DeviceNotificationWrapper.class);
+                        decrypt(notification); 
                         process(notification); 
-
                     }   
                     buffer.clear(); 
                 }

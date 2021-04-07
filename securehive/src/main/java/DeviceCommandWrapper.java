@@ -7,8 +7,7 @@ import java.util.ArrayList;
  * This class is used in the enclave processor to represent a constructed command. 
  * The only way to construct a regular DeviceCommand is the sendCommand() method of the Device class. 
  * Since the enclave cannot establish a direct connection to the DeviceHive server it cannot use a Device to send a DeviceCommand. 
- * This wrapper is passed from the enclave processor to the class holding the Device via a SecureProcessorProxy
- * @param deviceId: is included to be able to match the responding command to a Device in a Host App that handles multiple devices. 
+ * This wrapper is passed from the enclave processor to the class holding the Device via a SecureProcessorProxy 
 */
 public class DeviceCommandWrapper implements Serializable
 {

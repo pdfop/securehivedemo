@@ -34,7 +34,7 @@ import com.google.common.hash.Funnels;
 import java.nio.charset.StandardCharsets;
 
 /**
- * This class is an Implementation of DeviceInterface with additional methods rather than a subclass of Device 
+ * This class is an implementation of DeviceInterface with additional methods rather than a subclass of Device 
  * This is done to preserve the original state of the Device Class 
  * Instances of this class have to be constructed using an existing Device to communicate with the DeviceHive Server 
  * This is done to preserve the original state of the server code. 
@@ -359,7 +359,12 @@ public class SecureDevice
      */
     public JsonObject getDecryptedParameters(DeviceCommand command) throws Exception
     {
-        JsonObject parameters = command.getParameters(); 
+        JsonObject parameters = command.getParameters();
+        if(parameters == null)
+        {
+            return null; 
+        } 
+
         JsonObject decryptedParameters = new JsonObject(); 
         Cipher decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding"); 
         IvParameterSpec iv = new IvParameterSpec(decoder.decode(parameters.get("iv").getAsString()));
@@ -377,14 +382,13 @@ public class SecureDevice
                 boolean contained = nonces.mightContain(nonce); 
                 if(contained)
                 {
-                    decryptedParameters.addProperty("nonce-status", "true");
+                    decryptedParameters.addProperty("nonce-seen", Boolean.toString(true));
                 } 
                 else
                 {
-                    decryptedParameters.addProperty("nonce-status", "false"); 
+                    decryptedParameters.addProperty("nonce-seen", Boolean.toString(false)); 
                     nonces.put(nonce); 
                 }
-
             } 
             else
             {

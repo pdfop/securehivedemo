@@ -1,6 +1,11 @@
 import com.google.gson.*; 
 import org.joda.time.DateTime;
 
+/**
+ * Wrapper class for DeviceNotifications to represent them on the enclave side.
+ * Used to be able to serialize them and to set parameters directly for the object after decryption.
+ * Necessary in order to preserve the original state of the DeviceNotification class.
+ */
 public class DeviceNotificationWrapper
 {
     private Long id;
@@ -26,6 +31,10 @@ public class DeviceNotificationWrapper
 
     public Long getId() {
         return id;
+    }
+
+    protected void setParameters(JsonObject params) {
+        this.parameters = params; 
     }
 
     public String getNotification() {
