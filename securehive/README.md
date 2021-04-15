@@ -1,4 +1,4 @@
-# DeviceHive  java client Intel SGX extension 
+# SecureHive: A DeviceHive Security Extension using Intel SGX
 Using:   
 [DeviceHive](https://devicehive.com)  
 [DeviceHive java client](https://github.com/devicehive/devicehive-java)  
@@ -11,14 +11,14 @@ A DeviceHive client app running on untrusted cloud hardware establishes a connec
 
 A SecureProcessor receives the DeviceNotifications of a connected Device through the proxy and implements the logic to process and analyze the notification data. It responds to the Device and publishes messages through DeviceCommands. The Device may subscribe and react to those Commands.  
 
-The SecureDevice has a key store that contains a x.509 certificate of the SecureProcessor and additional secrets used in the remote attestation process. The SecureProcessor had a key store that contains x.509 certificates for each SecureDevice that may want to connect to it. Each key store also contains the private key for its owner's certificate. The certificates use 2048 bit RSA. 
+The SecureDevice has a key store that contains a x.509 certificate of the SecureProcessor and additional secrets used in the remote attestation process. The SecureProcessor has a key store that contains x.509 certificates for each SecureDevice that may want to connect to it. Each key store also contains the private key for its owner's certificate. The certificates use 2048 bit RSA. 
 
 When a SecureDevice connects to the Server it will start sending a key exchange request notification. Upon receiving the request the processor will respond with a key exchange command. This command contains a time stamp and its signature, signed using the SecureProcessor's private key. The SecureDevice verifies the signature using the SecureProcessor's public it. If this is successful the SecureDevice generates a 256 bit AES key. It encrypts this key using the SecureProcessor's public key and sends a key exchange notification the with key and the original time stamp signed using its own private key. 
-The SecureProcessor again verifies this signature and if successful will decrypt the contained AES key and accept it as the   SecureDevice's message key. From this point onwards the SecureDevice and SecureProcessor will encrypt and decrypt DeviceNotifications and DeviceCommands using this key.  
+The SecureProcessor again verifies this signature and if successful will decrypt the contained AES key and accept it as the SecureDevice's message key. From this point onwards the SecureDevice and SecureProcessor will encrypt and decrypt DeviceNotifications and DeviceCommands using this key.  
 
 When creating an encrypted notification or command the system will include the IV used for encryption and a time stamp to be used as a nonce. When the other party receives the message it will use the IV to allow for decryption and verify that the included time stamp matches the time stamp of the notification/command itself. This prevents a set of encrypted parameters from being replayed or delayed by a malicious host app.  
 
-The entire system and its classes are transparent to the DeviceHive server and work with  an unmodified Server. 
+The entire system and its classes are transparent to the DeviceHive server and work with an unmodified Server. 
 
 # Dataflow  
 The diagram below displays the way messages take through the system. They are encrypted during the entire transmission and only decrypted while in the enclave.  
@@ -102,7 +102,7 @@ public class Main
 The SecureProcessorProxy is instantiated by the host app on the hardware the SecureProcessor is running on. It acts as the bridge between the DeviceHive server and the processor running inside the enclave. The proxy manages the subscription to DeviceNotifications. Upon creation it will first connect to the enclave, then set the necessary subscriptions for the key exchange. After the exchange has been completed it will switch to the user-supplied NotificationFilter and begin exchanging messages between the DeviceHive server and the processor in the enclave. This happens transparently to the user developing the rest of the host app, which may be used to process non-privacy-critical notifications etc.  
 
 ### Usage Example  
-The SecureProcessorProxy have to be viewed in conjunction, as in a regular DeviceHive client that wishes to process notification data both the message exchange and processing would happen in the same function. 
+The SecureProcessorProxy has to be viewed in conjunction with its SecureProcessor, as in a regular DeviceHive client that wishes to process notification data both the message exchange and processing would happen in the same function. 
 
 ```
 public class Main {
@@ -165,8 +165,8 @@ public class Main {
     private static final String refreshToken = "";
     private static DeviceHive client;
     // ** additional parameters for enclave connection, could be saved in configuration file as well **
-    private final String enclaveIP = "10.0.1.1"; 
-    private final int port = 6767; 
+    private final String enclaveIP = ""; 
+    private final int port = ; 
     
     public static void main(String[] args) 
     {  
@@ -190,19 +190,20 @@ public class Main {
         *  parameters could also be loaded from a configuration file
         *  upon creation connection to the enclave, authentication and key exchange happen without user interaction
         *  processing logic (compare to the onSuccess function in the callback above) will be implemented
-        *   in the SecureProcessor
+        *  in the SecureProcessor
         */ 
         SecureProcessorProxy proxy = SecureProcessorProxyBuilder.build(device, filter, enclaveIP, port); 
     }
 }
 ```
 ## SecureProcessor 
-A SecureProcessor replaces the onSuccess function in a DeviceNotificationsCallback with its own process function. It runs inside an enclave using sgx-lkl and exchanges messages through a SecureProcessorProxy. It establishes an authenticated encrypted connection to any number of SecureDevices. It receives notifications matching a user-supplied NotificationFilter, decrypts their parameters and verifies their freshness, processes this data in a user-supplied way and sends an encrypted response to the proxy, which sends it to the DeviceHive server. 
+A SecureProcessor replaces the onSuccess function in a DeviceNotificationsCallback with its own process function. It runs inside an enclave using sgx-lkl and exchanges messages through a SecureProcessorProxy. It establishes an authenticated encrypted connection to a SecureDevice whose certificate has previously been added to its key store. It receives notifications matching a user-supplied NotificationFilter, decrypts their parameters and verifies their freshness, processes this data in a user-supplied way and sends an encrypted response to the proxy, which sends it to the DeviceHive server.   
+
 ### Usage Example 
 ```
 public class Main
 {
-    private static final int port = 6767;   
+    private static final int port = ;   
     
     public static void main(String[] args) throws Exception
     {
@@ -213,16 +214,15 @@ public class Main
     private class MySecureProcessor extends SecureProcessor
     {   
         @Override 
-        public void process(DeviceNotification notification) throws Exception
+        public void process(DeviceNotificationWrapper notification) throws Exception
         { 
         		int threshhold = 500;
-        		// assuming the enclave handles multiple devices we need to match notification to device
-                String deviceId = notification.getDeviceId(); 
                 List<Parameter> response = new ArrayList<Parameter>(); 
-                JsonObject parameters = getDecryptedParameters(notification, deviceId);
+                // ** parameters are transparently decrypted before the notification is passed to this function
+                JsonObject parameters = notification.getParameters(); 
                 int value = parameters.get("name").getAsInt(); 
                 response.add(new Parameter("over-threshhold", Boolean.toString( value > threshhold))); 
-                this.getServers().get(deviceId).sendCommand(encryptedCommand("response", response, deviceId));
+                sendCommand(encryptedCommand("response", response));
         }
     }
 }
@@ -234,3 +234,8 @@ The builder classes implement overloaded build methods that accept a number of p
 They also read configuration files in default and user-supplied paths. 
 Their intent is to remove configuration code from the respective classes to keep their code about their functionality. 
 Any builder is used like ClassName.build(parameters)
+
+## Wrapper classes 
+The DeviceNotificationWrapper and DeviceCommandWrapper classes represent DeviceNotifications and DeviceCommands on the enclave side.    
+They are necessary because the original classes have private constructors and cannot be directly instanciated in the enclave.  
+The original classes are also not serializable which is necessary to transport them between the host app jvm and the jvm in the enclave.  
