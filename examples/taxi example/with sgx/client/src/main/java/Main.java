@@ -41,7 +41,7 @@ public class Main
         };
         data = CacheBuilder.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build(loader); 
         Taxi t = new Taxi(); 
-  	    t.init(6767);      
+  	    t.init(6767, "testpw");      
     }
 
     private class Taxi extends SecureProcessor

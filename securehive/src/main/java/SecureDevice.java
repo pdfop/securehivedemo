@@ -7,11 +7,13 @@ import java.security.cert.CertificateException;
 import static org.junit.Assert.*;  
 import java.security.*;
 import javax.crypto.*; 
+import javax.crypto.Mac;
 import javax.crypto.spec.PBEKeySpec;
 import java.security.spec.InvalidKeySpecException;
 import java.util.List;
 import java.util.ArrayList; 
 import java.util.Base64;
+import java.util.Random;
 
 import com.github.devicehive.client.model.Parameter;
 import com.github.devicehive.client.service.Device;
@@ -47,6 +49,7 @@ public class SecureDevice
     private PrivateKey deviceSK;
     // encryption
     private SecretKey messageKey;  
+    private SecretKey macKey; 
     private BloomFilter<String> nonces;  
     // contains certificatates 
     private KeyStore store;
@@ -71,7 +74,7 @@ public class SecureDevice
      * Create a new SecureDevice
      * To be called by the SecureDeviceBuilder
      */
-    protected SecureDevice(Device device, boolean attest, String storePass, String storePath, String iasCertPath, String attestationServer) throws Exception
+    protected SecureDevice(Device device, boolean attest, String storePass, String storePath, String iasCertPath, String attestationServer, int nonceCapacity, double nonceError) throws Exception
     {
         this.device = device; 
         this.deviceId = device.getName(); 
@@ -79,13 +82,24 @@ public class SecureDevice
         this.iasCertPath = iasCertPath; 
         this.attestationServer = attestationServer; 
         this.storePath = storePath; 
-        this.nonces = BloomFilter.create(Funnels.stringFunnel(StandardCharsets.UTF_8), 5000, 0.01);
+        this.nonces = BloomFilter.create(Funnels.stringFunnel(StandardCharsets.UTF_8), nonceCapacity, nonceError);
         initSecurity(); 
         if(attest)
         {
-            remoteAttest(); 
+            remoteAttest();
+            if(attested)
+            {
+                keyExchange();
+            } 
+            else
+            {
+                System.exit(1); 
+            }
         }
-        keyExchange(); 
+        else
+        {
+            keyExchange();
+        } 
     }
 
     /**
@@ -125,13 +139,16 @@ public class SecureDevice
     }
 
     /**
-     * Generate a 256 bit AES Key to be used for message encryption 
+     * Generate a 256 bit AES Key to be used for message encryption and a 256 bit for message Authentication
      */
-    private void generateKey() throws Exception
+    private void generateKeys() throws Exception
     {
             KeyGenerator keyGen = KeyGenerator.getInstance("AES");
             keyGen.init(256);
             messageKey = keyGen.generateKey(); 
+            KeyGenerator macGen = KeyGenerator.getInstance("HmacSHA512");
+            macGen.init(256); 
+            macKey = macGen.generateKey(); 
     }
 
     /**
@@ -178,25 +195,38 @@ public class SecureDevice
                     if(verified)
                     {
                         // generate AES key and encrypt it using the enclave public key 
-                        generateKey();                        
+                        generateKeys();                        
                         Cipher encrypt=Cipher.getInstance("RSA/ECB/PKCS1Padding");
                         encrypt.init(Cipher.PUBLIC_KEY, enclavePK);
+                        // encrypt the message key using the enclave public key
                         byte[] encryptedKey = encrypt.doFinal(messageKey.getEncoded());
                         String keyString = encoder.encodeToString(encryptedKey);  
-                        // sign a timestamp with the device private key to be verified by the enclave 
+                        // encrypt the MAC key using the enclave public key
+                        byte[] encryptedMacKey = encrypt.doFinal(macKey.getEncoded()); 
+
                         Signature privateSignature = Signature.getInstance("SHA256withRSA");
                         privateSignature.initSign(deviceSK);
-                        privateSignature.update(timestamp.getBytes());
+                        // combine key and nonce to prevent key replacement
+                        String keyNonce = keyString + macKeyString + timestamp; 
+                        privateSignature.update(keyNonce.getBytes());
+                        // sign using the device private key
                         byte[] signature = privateSignature.sign();
-                        String signedStamp = encoder.encodeToString(signature); 
-                        
+                        String sigString = encoder.encodeToString(signature); 
+                        // build and send notification
                         List<Parameter> notifParams = new ArrayList<Parameter>(); 
                         notifParams.add(new Parameter("key", keyString)); 
-                        notifParams.add(new Parameter("signed", signedStamp)); 
-                        device.sendNotification("$keyexchange", notifParams); 
+                        notifParams.add(new Parameter("macKey", macKeyString)); 
+                        notifParams.add(new Parameter("signed", sigString)); 
+                        device.sendNotification("$keyexchange", notifParams);
+                        // key exchange done on device side  
                         sent = true; 
                         secure = true;
                         break; 
+                    }
+                    else
+                    {
+                        System.out.println("Invalid Signature. Exiting"); 
+                        System.exit(1); 
                     }                    
                 }
             }
@@ -328,27 +358,49 @@ public class SecureDevice
     }
 
     /**
+     * Generate a 64bit nonce to ensure message freshness
+     */
+    private byte[] generateNonce()
+    {
+        byte[] array = new byte[8];
+        new Random().nextBytes(array);
+        return array;    
+    }    
+
+    /**
      * Send an AES encrypted notification. 
      * Encrypts all given parameter names and values. 
      * Base64 Encoding is done to prevent encoding/blocksize problems with different String encodings. 
      * Includes the IV used during encryption as new parameter. 
-     * Does not include a Nonce as the notification timestamp may be used as such
+     * Includes a nonce to verify message freshness
+     * Includes a MAC to verify message integrity
      * @returns the DHResponse of the underlying sendNotification call  
      */
     public DHResponse<DeviceNotification> sendEncryptedNotification(String notification, List<Parameter> parameters) throws Exception
     {
+        // initialize encryption cipher 
         Cipher encrypt = Cipher.getInstance("AES/CBC/PKCS5Padding");
         IvParameterSpec iv = generateIV();
         encrypt.init(Cipher.ENCRYPT_MODE, messageKey, iv); 
-
+        
+        // initialize message authentication 
+        Mac mac = Mac.getInstance("HmacSHA512");
+        mac.init(macKey);
+        StringBuilder sb = new StringBuilder(200); 
         for(Parameter param : parameters)
         {
             // encrypt parameter key and value
             param.setValue(encoder.encodeToString(encrypt.doFinal(param.getValue().getBytes()))); 
             param.setKey(encoder.encodeToString(encrypt.doFinal(param.getKey().getBytes()))); 
+            sb.append(param.getKey()); 
+            sb.append(param.getValue()); 
+
         }
+        mac.update(sb.toString().getBytes()); 
         // add IV and Nonce 
         parameters.add(new Parameter("iv", encoder.encodeToString(iv.getIV()))); 
+        parameters.add(new Parameter("nonce", encoder.encodeToString(encrypt.doFinal(generateNonce()))));
+        parameters.add(new Parameter("mac", encoder.encodeToString(mac.doFinal())));
         return device.sendNotification(notification, parameters); 
     }
 
@@ -366,38 +418,50 @@ public class SecureDevice
         } 
 
         JsonObject decryptedParameters = new JsonObject(); 
+
+        // extract IV and prepare decryption cipher
         Cipher decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding"); 
         IvParameterSpec iv = new IvParameterSpec(decoder.decode(parameters.get("iv").getAsString()));
         decrypt.init(Cipher.DECRYPT_MODE, messageKey, iv);
+        // initialize message authentication
+        Mac mac = Mac.getInstance("HmacSHA512");
+        mac.init(macKey);
+        StringBuilder sb = new StringBuilder(200); 
+        String serverMAC = parameters.get("mac").getAsString(); 
+        // extract and verify nonce 
+        String nonce = new String(decrypt.doFinal(decoder.decode(parameters.get("nonce").getAsString())));
+        boolean contained = nonces.mightContain(nonce); 
+        if(contained)
+        {
+            decryptedParameters.addProperty("nonce-seen", Boolean.toString(true));
+        } 
+        else
+        {
+            decryptedParameters.addProperty("nonce-seen", Boolean.toString(false)); 
+            nonces.put(nonce); 
+        }
 
+        // remove meta parameters before decrypting
+        parameters.remove("iv");
+        parameters.remove("nonce"); 
+        parameters.remove("mac");
         for(java.util.Map.Entry<String, JsonElement> entry : parameters.entrySet())
         {
-            if(entry.getKey().equals("iv"))
-            {
-                continue; 
-            }
-            if(entry.getKey().equals("nonce"))
-            {
-                String nonce = new String(decrypt.doFinal(decoder.decode(entry.getValue().getAsString()))); 
-                boolean contained = nonces.mightContain(nonce); 
-                if(contained)
-                {
-                    decryptedParameters.addProperty("nonce-seen", Boolean.toString(true));
-                } 
-                else
-                {
-                    decryptedParameters.addProperty("nonce-seen", Boolean.toString(false)); 
-                    nonces.put(nonce); 
-                }
-            } 
-            else
-            {
-                decryptedParameters.addProperty(new String(decrypt.doFinal(decoder.decode(entry.getKey()))),
-                    new String(decrypt.doFinal(decoder.decode(entry.getValue().getAsString())))
-                 );                
-            }
+            sb.append(entry.getKey()); 
+            sb.append(entry.getValue().getAsString()); 
+            decryptedParameters.addProperty(new String(decrypt.doFinal(decoder.decode(entry.getKey()))), new String(decrypt.doFinal(decoder.decode(entry.getValue().getAsString()))));         
         }
-        return decryptedParameters; 
+        mac.update(sb.toString().getBytes()); 
+        String clientMAC = encoder.encodeToString(mac.doFinal()); 
+        if(clientMAC.equals(serverMAC))
+        {
+            return decryptedParameters; 
+        }
+        else
+        {   
+            System.out.println("Message Authentication Failed"); 
+            return new JsonObject(); 
+        }
     }
 
     /**

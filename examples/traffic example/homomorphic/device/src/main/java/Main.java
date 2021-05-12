@@ -45,9 +45,9 @@ import com.n1analytics.paillier.*;
 public class Main
 {	
     // Devicehive Setup 
-    private static final String URL = "http://20.67.42.189/api/rest"; 
-    private static final String accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxOTgyMDAwMDAwMCwidCI6MSwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.zjTBCAtTFqNMfLzW11Xqz44UJ5wPkM5j1AUW_6vzpew";
-    private static final String refreshToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxOTgyMDAwMDAwMCwidCI6MCwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.mMF61xlkbHblaSCwikU0m5J9s7hWDAzSAbuKpPkM0GQ";
+    private static final String URL = "http://20.67.42.189//api/rest"; 
+    private static final String accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYyMDgwNTQzOTc4NiwidCI6MSwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.v48hkgchHdkk2x4B4qEF0hz_hfMRnxaj8qluWKEoKMY";
+    private static final String refreshToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYzNjUyODQzOTc4NiwidCI6MCwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.HqZp_oLBIhgzTjCSuE7zuSCvguj4MSSUjV-aaE_0unE";
     private Device device; 
     private String deviceId;
     private HomomorphicDevice secureDevice;
@@ -131,7 +131,7 @@ public class Main
                     else
                     {
                         // here we can make the scheduling rate variable e.g. by additionally reading a measurement delay from our data csv 
-                        service.schedule(this, 400L, TimeUnit.MILLISECONDS);
+                        service.schedule(this, 500L, TimeUnit.MILLISECONDS);
                         //Long.parseLong(data.get(current).get(2))
                     }   
                 }    

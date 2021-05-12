@@ -18,6 +18,7 @@ import java.security.cert.CertificateException;
 import static org.junit.Assert.*;  
 import java.security.*;
 import javax.crypto.*; 
+import javax.crypto.Mac;
 import javax.crypto.spec.PBEKeySpec;
 import java.security.spec.InvalidKeySpecException;
 
@@ -29,6 +30,8 @@ import java.math.BigInteger;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Arrays; 
+import java.util.Random; 
 import java.security.KeyPair;
 
 import com.google.gson.*; 
@@ -40,6 +43,11 @@ import java.util.Base64;
 import ope.util.Encoder; 
 import ope.fast.FastOpeKey;  
 
+import com.google.common.hash.BloomFilter; 
+import com.google.common.hash.Funnels;
+
+import java.nio.charset.StandardCharsets;
+
 public class HomomorphicDevice
 {   
     private Device device; 
@@ -47,14 +55,17 @@ public class HomomorphicDevice
     private PublicKey enclavePK; 
     private PrivateKey deviceSK; 
     private SecretKey messageKey;  
+    private SecretKey macKey; 
+    private BloomFilter<String> nonces;  
     private KeyStore store;
     private final char[] pwdArray = "testpw".toCharArray();    
     private final String storePath = "resources/SecureHiveDevice.pkcs12";   
 
     // homomorphic encryption 
-    private  PaillierPrivateKey privKey;
-    private  PaillierPublicKey pubKey;
+    private PaillierPrivateKey privKey;
+    private PaillierPublicKey pubKey;
     private PaillierContext cipher; 
+
     // string encoding 
     private Base64.Decoder decoder = Base64.getDecoder(); 
     private Base64.Encoder encoder = Base64.getEncoder();
@@ -64,6 +75,7 @@ public class HomomorphicDevice
     public HomomorphicDevice(Device device) throws Exception
     {
         this.device = device;
+        nonces = BloomFilter.create(Funnels.stringFunnel(StandardCharsets.UTF_8), 2500, 0.01d);
         init();  
         keyExchange(); 
 
@@ -73,14 +85,21 @@ public class HomomorphicDevice
     {
         // encrypt license plate with AES 
         Parameter param = parameters.get(0);
-        Cipher encrypt = Cipher.getInstance("AES/CBC/PKCS5Padding"); 
-        IvParameterSpec iv = generateIV(); 
-        encrypt.init(Cipher.ENCRYPT_MODE, messageKey, iv);
-        // add the IV used for AES
-        parameters.add(new Parameter("iv", encoder.encodeToString(iv.getIV()))); 
+        // initialize encryption cipher 
+        Cipher encrypt = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        IvParameterSpec iv = generateIV();
+        encrypt.init(Cipher.ENCRYPT_MODE, messageKey, iv); 
+        
+        // initialize message authentication 
+        Mac mac = Mac.getInstance("HmacSHA512");
+        mac.init(macKey);
+        StringBuilder sb = new StringBuilder(400); 
 
         param.setValue(encoder.encodeToString(encrypt.doFinal(param.getValue().getBytes())));
         param.setKey(encoder.encodeToString(encrypt.doFinal(param.getKey().getBytes())));
+        sb.append(param.getKey()); 
+        sb.append(param.getValue()); 
+
 
         // encrypt speed value with pallier to enable addition to calculate difference to limit 
         param = parameters.get(1); 
@@ -90,16 +109,26 @@ public class HomomorphicDevice
         jsonEnc.addProperty("ciphertext", enc.ciphertext);  
         param.setValue(jsonEnc.toString()); 
         param.setKey(encoder.encodeToString(encrypt.doFinal(param.getKey().getBytes())));
-
+        sb.append(param.getKey()); 
+        sb.append(param.getValue()); 
         // encrypt speed value again with OPE scheme to make comparison to limit
         param = parameters.get(2); 
         param.setKey(encoder.encodeToString(encrypt.doFinal(param.getKey().getBytes())));
         param.setValue(encoder.encodeToString(opeKey.encrypt(Encoder.encodeInt(Integer.parseInt(param.getValue()))))); 
-
+        sb.append(param.getKey()); 
+        sb.append(param.getValue()); 
         // encrypt timestamp with AES 
         param = parameters.get(3); 
         param.setValue(encoder.encodeToString(encrypt.doFinal(param.getValue().getBytes())));
         param.setKey(encoder.encodeToString(encrypt.doFinal(param.getKey().getBytes())));
+        sb.append(param.getKey()); 
+        sb.append(param.getValue()); 
+
+        mac.update(sb.toString().getBytes()); 
+        // add IV and Nonce 
+        parameters.add(new Parameter("iv", encoder.encodeToString(iv.getIV()))); 
+        parameters.add(new Parameter("nonce", encoder.encodeToString(encrypt.doFinal(generateNonce()))));
+        parameters.add(new Parameter("mac", encoder.encodeToString(mac.doFinal())));
 
         return device.sendNotification(notification, parameters); 
     }
@@ -107,20 +136,43 @@ public class HomomorphicDevice
     public JsonObject getDecryptedParameters(DeviceCommand command) throws Exception
     {
         JsonObject parameters = command.getParameters(); 
-        JsonObject decryptedParameters = new JsonObject();
-        Gson gson = new Gson();  
+        if(parameters == null)
+        {
+            return null; 
+        } 
+        JsonObject decryptedParameters = new JsonObject(); 
+        Gson gson = new Gson(); 
+        // extract IV and prepare decryption cipher
         Cipher decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding"); 
         IvParameterSpec iv = new IvParameterSpec(decoder.decode(parameters.get("iv").getAsString()));
         decrypt.init(Cipher.DECRYPT_MODE, messageKey, iv);
+        // initialize message authentication
+        Mac mac = Mac.getInstance("HmacSHA512");
+        mac.init(macKey);
+        StringBuilder sb = new StringBuilder(200); 
+        String serverMAC = parameters.get("mac").getAsString(); 
+        // extract and verify nonce 
+        String nonce = new String(decrypt.doFinal(decoder.decode(parameters.get("nonce").getAsString())));
+        boolean contained = nonces.mightContain(nonce); 
+        if(contained)
+        {
+            decryptedParameters.addProperty("nonce-seen", Boolean.toString(true));
+        } 
+        else
+        {
+            decryptedParameters.addProperty("nonce-seen", Boolean.toString(false)); 
+            nonces.put(nonce); 
+        }
 
+        // remove meta parameters before decrypting
+        parameters.remove("iv");
+        parameters.remove("nonce"); 
+        parameters.remove("mac");
         java.util.Set<java.util.Map.Entry<java.lang.String,JsonElement>> entries = parameters.entrySet(); 
         for(java.util.Map.Entry<String, JsonElement> entry : entries)
         {
-            if(entry.getKey().equals("iv"))
-            {
-                continue;
-            }
-
+            sb.append(entry.getKey()); 
+            sb.append(entry.getValue().getAsString());
             String key = new String(decrypt.doFinal(decoder.decode(entry.getKey()))); 
             // decrypt license plate with AES
             if(key.equals("license-plate") || key.equals("time"))
@@ -139,9 +191,28 @@ public class HomomorphicDevice
 
             }
         }
-         
-        return decryptedParameters; 
+        mac.update(sb.toString().getBytes()); 
+        String clientMAC = encoder.encodeToString(mac.doFinal()); 
+        if(clientMAC.equals(serverMAC))
+        {
+            return decryptedParameters; 
+        }
+        else
+        {   
+            System.out.println("Message Authentication Failed"); 
+            return new JsonObject(); 
+        }
     }
+
+     /**
+     * Generate a 64bit nonce to ensure message freshness
+     */
+    private byte[] generateNonce()
+    {
+        byte[] array = new byte[8];
+        new Random().nextBytes(array);
+        return array;    
+    } 
 
     private void init() throws Exception
     {
@@ -174,17 +245,23 @@ public class HomomorphicDevice
 
     }
 
+    /**
+     * Generate a 256 bit AES Key to be used for message encryption and a 256 bit for message Authentication
+     */
     private void generateKey() throws Exception
     {
             KeyGenerator keyGen = KeyGenerator.getInstance("AES");
             keyGen.init(256);
             messageKey = keyGen.generateKey(); 
+            KeyGenerator macGen = KeyGenerator.getInstance("HmacSHA512");
+            macGen.init(256); 
+            macKey = macGen.generateKey(); 
     }
 
     private IvParameterSpec generateIV()
     {
         byte[] iv = new byte[16];
-        new SecureRandom().nextBytes(iv);
+        Arrays.fill(iv, (byte) 1);
         return new IvParameterSpec(iv);
     }
 
@@ -227,18 +304,26 @@ public class HomomorphicDevice
                         Cipher encrypt=Cipher.getInstance("RSA/ECB/PKCS1Padding");
                         encrypt.init(Cipher.PUBLIC_KEY, enclavePK);
                         byte[] encryptedKey = encrypt.doFinal(messageKey.getEncoded());
-                        String keyString = encoder.encodeToString(encryptedKey);  
+                        String keyString = encoder.encodeToString(encryptedKey);
+
+                        // encrypt the MAC key using the enclave public key
+                        byte[] encryptedMacKey = encrypt.doFinal(macKey.getEncoded()); 
+                        String macKeyString = encoder.encodeToString(encryptedMacKey);
 
                         Signature privateSignature = Signature.getInstance("SHA256withRSA");
                         privateSignature.initSign(deviceSK);
-                        privateSignature.update(timestamp.getBytes());
+                        // combine key and nonce to prevent key replacement
+                        String keyNonce = keyString + macKeyString + timestamp; 
+                        privateSignature.update(keyNonce.getBytes());
+                        // sign using the device private key
                         byte[] signature = privateSignature.sign();
-                        String signedStamp = encoder.encodeToString(signature); 
-                        
+                        String sigString = encoder.encodeToString(signature); 
+                        // build and send notification
                         List<Parameter> notifParams = new ArrayList<Parameter>(); 
                         notifParams.add(new Parameter("key", keyString)); 
-                        notifParams.add(new Parameter("signed", signedStamp)); 
-                        device.sendNotification("$keyexchange", notifParams); 
+                        notifParams.add(new Parameter("macKey", macKeyString)); 
+                        notifParams.add(new Parameter("signed", sigString)); 
+                        device.sendNotification("$keyexchange", notifParams);
 
                         Cipher encryptAES = Cipher.getInstance("AES/CBC/PKCS5Padding");
                         IvParameterSpec iv = generateIV();

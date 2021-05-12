@@ -43,9 +43,9 @@ import org.joda.time.Duration;
 public class Main
 {	
     // Devicehive Setup 
-    private static final String URL = "http://20.67.42.189/api/rest"; 
-    private static final String accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxOTgyMDAwMDAwMCwidCI6MSwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.zjTBCAtTFqNMfLzW11Xqz44UJ5wPkM5j1AUW_6vzpew";
-    private static final String refreshToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxOTgyMDAwMDAwMCwidCI6MCwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.mMF61xlkbHblaSCwikU0m5J9s7hWDAzSAbuKpPkM0GQ";
+    private static final String URL = "http://20.67.42.189//api/rest"; 
+    private static final String accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYyMDgwNTQzOTc4NiwidCI6MSwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.v48hkgchHdkk2x4B4qEF0hz_hfMRnxaj8qluWKEoKMY";
+    private static final String refreshToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYzNjUyODQzOTc4NiwidCI6MCwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.HqZp_oLBIhgzTjCSuE7zuSCvguj4MSSUjV-aaE_0unE";
 
     private static final String deviceId = "Taxi"; 
     private Device device; 
@@ -98,8 +98,8 @@ public class Main
                     params.add(new Parameter("pickup-time", line.get(0))); 
                     params.add(new Parameter("dropoff-time", line.get(1))); 
 
-                    params.add(new Parameter("$pickup-location", line.get(3))); 
-                    params.add(new Parameter("$dropoff-location", line.get(4))); 
+                    params.add(new Parameter("pickup-location", line.get(3))); 
+                    params.add(new Parameter("dropoff-location", line.get(4))); 
 
                     params.add(new Parameter("$distance", line.get(2))); 
                     params.add(new Parameter("$cost", line.get(5))); 
@@ -166,9 +166,8 @@ public class Main
                 {
                     times.set(timerIndex, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - times.get(timerIndex))); 
                     timerIndex++;
-                    System.out.println(times);
                 }
-                if(timerIndex > 30)
+                if(timerIndex > 360)
                 {
                     try
                     {
@@ -219,7 +218,7 @@ public class Main
                 }
                 finally
                 {
-                    if(timerIndex <= 30)
+                    if(timerIndex <= 360)
                     {
                         service.schedule(this, 5L, TimeUnit.SECONDS);
                     }                    

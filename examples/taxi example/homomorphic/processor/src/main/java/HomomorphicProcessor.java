@@ -18,12 +18,16 @@ import com.github.devicehive.client.service.Device;
 import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList; 
+import java.util.Arrays; 
+import java.util.Random; 
 
 import java.io.FileInputStream; 
 import java.io.FileOutputStream; 
 import java.security.*;
 import java.security.cert.Certificate; 
 import javax.crypto.*; 
+import javax.crypto.Mac;
+
 import java.io.*; 
 import static org.junit.Assert.*; 
 import javax.crypto.spec.PBEKeySpec;
@@ -46,7 +50,10 @@ import com.google.gson.JsonElement;
 import java.util.Base64; 
 
 import com.n1analytics.paillier.*;
+import com.google.common.hash.BloomFilter; 
+import com.google.common.hash.Funnels;
 
+import java.nio.charset.StandardCharsets;
 
 public class HomomorphicProcessor
 {
@@ -54,6 +61,8 @@ public class HomomorphicProcessor
     private PublicKey devicePK;   
     private PrivateKey enclaveSK;
     private SecretKey messageKey;  
+    private SecretKey macKey; 
+    private BloomFilter<String> nonces; 
     // TODO: get this as user input rather than hardcode it 
     private KeyStore store; 
     private char[] pwdArray = "testpw".toCharArray(); 
@@ -70,7 +79,8 @@ public class HomomorphicProcessor
 
     public HomomorphicProcessor(Device device) throws Exception
     {
-        this.device = device; 
+        this.device = device;
+        nonces = BloomFilter.create(Funnels.stringFunnel(StandardCharsets.UTF_8), 2500, 0.01d); 
         init(); 
         keyExchange(); 
     }
@@ -148,21 +158,32 @@ public class HomomorphicProcessor
             for(DeviceNotification notif : notifications)
             {
                 if(notif.getNotification().equals("$keyexchange"))
-                {
-                    JsonObject parameters = notif.getParameters(); 
+                {  
+                    JsonObject parameters = notif.getParameters();
                     Signature publicSignature = Signature.getInstance("SHA256withRSA");
                     publicSignature.initVerify(devicePK);
-                    publicSignature.update(timestamp.getBytes());
+
+                    Cipher decrypt=Cipher.getInstance("RSA/ECB/PKCS1Padding");
+                    decrypt.init(Cipher.PRIVATE_KEY, enclaveSK);
+ 
                     byte[] signatureBytes = decoder.decode(parameters.get("signed").getAsString());
+                    String sigString = parameters.get("key").getAsString() + parameters.get("macKey").getAsString() + timestamp; 
+                    publicSignature.update(sigString.getBytes());
                     Boolean verified = publicSignature.verify(signatureBytes);
                     if(verified)
                     { 
-                        Cipher decrypt=Cipher.getInstance("RSA/ECB/PKCS1Padding");
-                        decrypt.init(Cipher.PRIVATE_KEY, enclaveSK);
                         byte[] decodedKey = decrypt.doFinal(decoder.decode(parameters.get("key").getAsString()));
-                        messageKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES"); 
-                    } 
-                }
+                        byte[] decodedMacKey = decrypt.doFinal(decoder.decode(parameters.get("macKey").getAsString()));
+                        messageKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
+                        macKey = new SecretKeySpec(decodedMacKey, 0, decodedKey.length, "HmacSHA512");
+                    }
+                    else
+                    {
+                        System.out.println("Invalid Signature. Exiting."); 
+                        System.exit(1); 
+
+                    }
+                } 
                 if(notif.getNotification().equals("$HEK"))
                 {
                     notification = notif; 
@@ -184,6 +205,119 @@ public class HomomorphicProcessor
         }         
     }
 
+    public List<Parameter> encryptAndMac(List<Parameter> parameters) throws Exception
+    {
+         // initialize encryption cipher 
+         Cipher encrypt = Cipher.getInstance("AES/CBC/PKCS5Padding");
+         IvParameterSpec iv = generateIV();
+         encrypt.init(Cipher.ENCRYPT_MODE, messageKey, iv); 
+         
+         // initialize message authentication 
+         Mac mac = Mac.getInstance("HmacSHA512");
+         mac.init(macKey);
+         StringBuilder sb = new StringBuilder(400); 
+         List<Parameter> encparameters = new ArrayList<>(); 
+         for(Parameter param : parameters)
+         {   
+             if(param.getKey().contains("$") && !param.getKey().contains("exponent"))
+             {
+                 // encrypt parameter key and value
+                 Parameter n = new Parameter(encoder.encodeToString(encrypt.doFinal(param.getKey().getBytes())), param.getValue());
+                 encparameters.add(n); 
+                 sb.append(n.getKey()); 
+                 sb.append(n.getValue());
+                 
+             }
+             else 
+             {
+                 Parameter p = new Parameter(encoder.encodeToString(encrypt.doFinal(param.getKey().getBytes())), encoder.encodeToString(encrypt.doFinal(param.getValue().getBytes())));
+                 encparameters.add(p);
+                 sb.append(p.getKey()); 
+                 sb.append(p.getValue());  
+             }
+ 
+         }
+         mac.update(sb.toString().getBytes()); 
+         // add IV and Nonce 
+         encparameters.add(new Parameter("iv", encoder.encodeToString(iv.getIV()))); 
+         encparameters.add(new Parameter("nonce", encoder.encodeToString(encrypt.doFinal(generateNonce()))));
+         encparameters.add(new Parameter("mac", encoder.encodeToString(mac.doFinal())));
+         return encparameters; 
+    }
+
+    public JsonObject decryptAndVerify(JsonObject parameters) throws Exception
+    {
+        JsonObject decryptedParameters = new JsonObject(); 
+         // extract IV and prepare decryption cipher
+         Cipher decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding"); 
+         IvParameterSpec iv = new IvParameterSpec(decoder.decode(parameters.get("iv").getAsString()));
+         decrypt.init(Cipher.DECRYPT_MODE, messageKey, iv);
+         // initialize message authentication
+         Mac mac = Mac.getInstance("HmacSHA512");
+         mac.init(macKey);
+         StringBuilder sb = new StringBuilder(400); 
+         String serverMAC = parameters.get("mac").getAsString(); 
+         // extract and verify nonce 
+         String nonce = new String(decrypt.doFinal(decoder.decode(parameters.get("nonce").getAsString())));
+         boolean contained = nonces.mightContain(nonce); 
+         if(contained)
+         {
+             decryptedParameters.addProperty("nonce-seen", Boolean.toString(true));
+         } 
+         else
+         {
+             decryptedParameters.addProperty("nonce-seen", Boolean.toString(false)); 
+             nonces.put(nonce); 
+         }
+ 
+         // remove meta parameters before decrypting
+         parameters.remove("iv");
+         parameters.remove("nonce"); 
+         parameters.remove("mac");
+         for(java.util.Map.Entry<String, JsonElement> entry : parameters.entrySet())
+         {
+             sb.append(entry.getKey()); 
+             sb.append(entry.getValue().getAsString()); 
+             String key = new String(decrypt.doFinal(decoder.decode(entry.getKey()))); 
+             if(key.contains("$"))
+             {
+                decryptedParameters.addProperty(key, entry.getValue().getAsBigInteger()); 
+             }
+             else
+             {
+                decryptedParameters.addProperty(key, entry.getValue().getAsString()); 
+             }
+      
+         }
+         mac.update(sb.toString().getBytes()); 
+         String clientMAC = encoder.encodeToString(mac.doFinal()); 
+         if(clientMAC.equals(serverMAC))
+         {
+             return decryptedParameters; 
+         }
+         else
+         {   
+             System.out.println("Message Authentication Failed"); 
+             return new JsonObject(); 
+         }
+    }
+
+    /**
+     * Generate a 64bit nonce to ensure message freshness
+     */
+    private byte[] generateNonce()
+    {
+        byte[] array = new byte[8];
+        new Random().nextBytes(array);
+        return array;    
+    } 
+
+    private IvParameterSpec generateIV()
+    {
+        byte[] iv = new byte[16];
+        Arrays.fill(iv, (byte) 1); 
+        return new IvParameterSpec(iv);
+    }
 
     public void process(DeviceNotification notification) throws Exception
     {   

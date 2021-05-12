@@ -44,9 +44,9 @@ public class Main
     //DeviceHive settings
 
     private static final String[] deviceIds = {"Taxi", "Requester"}; 
-    private static final String URL = "http://20.67.42.189/api/rest"; 
-    private static final String accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxOTgyMDAwMDAwMCwidCI6MSwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.zjTBCAtTFqNMfLzW11Xqz44UJ5wPkM5j1AUW_6vzpew";
-    private static final String refreshToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYxOTgyMDAwMDAwMCwidCI6MCwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.mMF61xlkbHblaSCwikU0m5J9s7hWDAzSAbuKpPkM0GQ";
+    private static final String URL = "http://20.67.42.189//api/rest"; 
+    private static final String accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYyMDgwNTQzOTc4NiwidCI6MSwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.v48hkgchHdkk2x4B4qEF0hz_hfMRnxaj8qluWKEoKMY";
+    private static final String refreshToken = "eyJhbGciOiJIUzI1NiJ9.eyJwYXlsb2FkIjp7ImEiOlswXSwiZSI6MTYzNjUyODQzOTc4NiwidCI6MCwidSI6MSwibiI6WyIqIl0sImR0IjpbIioiXX19.HqZp_oLBIhgzTjCSuE7zuSCvguj4MSSUjV-aaE_0unE";
 
     private Device taxi = null;
     private Device requester = null;  
@@ -83,7 +83,7 @@ public class Main
                 return new Trip();
             }
         };
-        data = CacheBuilder.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build(loader); 
+        data = CacheBuilder.newBuilder().expireAfterWrite(15, TimeUnit.MINUTES).build(loader); 
     }
 
     private void subscribeData() throws Exception
@@ -143,7 +143,7 @@ public class Main
                     } 
                     catch (Exception e)
                     {
-                        //TODO: handle exception
+                       System.out.println("Failed to process request");
                     }
                     
                 } 
@@ -171,13 +171,13 @@ public class Main
             {
                 try
                 {
-                    JsonObject parameters = notification.getParameters(); 
+                    JsonObject parameters = decryptAndVerify(notification.getParameters()); 
                     Trip trip = new Trip(); 
-                    trip.pickupLocation = parameters.get("$pickup-location").getAsBigInteger();
-                    trip.dropoffLocation = parameters.get("$dropoff-location").getAsBigInteger();
+                    trip.pickupLocation = parameters.get("pickup-location").getAsString();
+                    trip.dropoffLocation = parameters.get("dropoff-location").getAsString();
 
-                    trip.startExponent = parameters.get("$pickup-locationexponent").getAsInt(); 
-                    trip.destExponent = parameters.get("$dropoff-locationexponent").getAsInt(); 
+                    //trip.startExponent = parameters.get("$pickup-locationexponent").getAsInt(); 
+                   // trip.destExponent = parameters.get("$dropoff-locationexponent").getAsInt(); 
                     
 
                     trip.pickupTime = parameters.get("pickup-time").getAsString(); 
@@ -211,7 +211,7 @@ public class Main
 
                     if (entry == null) 
                     {
-                        routes.put(route, new CounterEntry(t.distance, t.distanceExp, t.cost, t.costExp, t.startExponent, t.destExponent)); 
+                        routes.put(route, new CounterEntry(t.distance, t.distanceExp, t.cost, t.costExp)); 
                     }
                     else 
                     {
@@ -235,19 +235,27 @@ public class Main
                     EncryptedNumber avgCost =  entry.getValue().cost.multiply(e); 
                     response.add(new Parameter("rank", String.valueOf(i+1))); 
 
-                    response.add(new Parameter("$start",route[0]));   
-                    response.add(new Parameter("$startexponent",String.valueOf(entry.getValue().startExponent))); 
+                    response.add(new Parameter("start",route[0]));   
+                    //response.add(new Parameter("startexponent",String.valueOf(entry.getValue().startExponent))); 
 
-                    response.add(new Parameter("$destination",route[1])); 
-                    response.add(new Parameter("$destinationexponent",String.valueOf(entry.getValue().destExponent))); 
+                    response.add(new Parameter("destination",route[1])); 
+                   // response.add(new Parameter("$destinationexponent",String.valueOf(entry.getValue().destExponent))); 
 
 
                     response.add(new Parameter("$average-distance", avgDist.calculateCiphertext().toString()));  
+                    response.add(new Parameter("$average-distanceexponent", String.valueOf(avgDist.getExponent()))); 
                     response.add(new Parameter("$average-cost", avgCost.calculateCiphertext().toString()));  
-
-                    response.add(new Parameter("$average-distanceexponent", String.valueOf(avgDist.getExponent())));  
                     response.add(new Parameter("$average-costexponent", String.valueOf(avgCost.getExponent()))); 
-                    device.sendCommand("response", response); 
+                    try
+                    {
+                        device.sendCommand("response", encryptAndMac(response));
+                    } 
+                    catch (Exception exception)
+                    {
+                        System.out.println("Sending command failed"); 
+                        System.out.println(exception.getMessage()); 
+                        exception.printStackTrace(System.out); 
+                    }
                 }
 
             }
@@ -262,12 +270,10 @@ public class Main
             int startExponent; 
             int destExponent; 
     
-            public CounterEntry(BigInteger dist, int distExp, BigInteger cost, int costExp, int startExp, int destExp)
+            public CounterEntry(BigInteger dist, int distExp, BigInteger cost, int costExp)
             {
                 distance = new EncryptedNumber(cipher, dist, distExp);  
                 this.cost = new EncryptedNumber(cipher, cost, costExp); 
-                startExponent = startExp; 
-                destExponent = destExp; 
             }
     
             public void increment()
@@ -322,6 +328,8 @@ public class Main
         @Override
         public void process(DeviceNotification notifiation)
         {
+            System.out.println("Processing request");
+
             Map<String, CounterEntry> routes = new HashMap<>();
             ConcurrentMap<String, Trip> freeze = data.asMap();
 
@@ -362,7 +370,14 @@ public class Main
 
                 response.add(new Parameter("$average-distanceexponent", String.valueOf(avgDist.getExponent())));  
                 response.add(new Parameter("$average-costexponent", String.valueOf(avgCost.getExponent()))); 
-                device.sendCommand("response", response); 
+                try
+                {
+                    device.sendCommand("response", encryptAndMac(response));
+                } 
+                catch (Exception exception)
+                {
+                    System.out.println("Sending command failed"); 
+                }
             }
 
         }

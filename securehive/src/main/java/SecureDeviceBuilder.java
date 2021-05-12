@@ -16,6 +16,8 @@ public class SecureDeviceBuilder
      * storePass : changeit 
      * iasCertPath : resources/iasCert.pem
      * attestationServer : 10.0.1.1:56000
+     * nonceCapacity : 2500
+     * nonceError : 0.01
      */
     public static SecureDevice build(Device device) throws Exception
     {
@@ -32,6 +34,8 @@ public class SecureDeviceBuilder
      * storePass : changeit 
      * iasCertPath : resources/iasCert.pem
      * attestationServer : 10.0.1.1:56000
+     * nonceCapacity : 2500
+     * nonceError : 0.01
      */
     public static SecureDevice build(Device device, String configPath) throws Exception
     {
@@ -41,7 +45,8 @@ public class SecureDeviceBuilder
         String storePath = "resources/SecureHiveDevice.pkcs12"; 
         String iasCertPath = "resources/iasCert.pem"; 
         String attestationServer = "10.0.1.1/56000";  
-
+        int nonceCapacity = 2500; 
+        double nonceError = 0.01d; 
         try (BufferedReader br = new BufferedReader(new FileReader(configPath))) 
         {
             String line;
@@ -65,6 +70,12 @@ public class SecureDeviceBuilder
                     case "attestationServer":
                         attestationServer = split[1]; 
                         break;
+                    case "nonceCapacity":
+                        nonceCapacity = Integer.parseInt(split[1]); 
+                        break; 
+                    case "nonceError": 
+                        nonceError = Double.parseDouble(split[1]); 
+                        break; 
                     default:
                         break; 
 
@@ -76,17 +87,17 @@ public class SecureDeviceBuilder
             // if file reading failed assume default values
         } 
         return new SecureDevice(device, attest, storePass,
-        storePath, iasCertPath, attestationServer); 
+        storePath, iasCertPath, attestationServer, nonceCapacity, nonceError); 
     }
 
     /**
      * Overloaded build method to construct a SecureDevice from its constructor parameters. 
      */
     public static SecureDevice build(Device device, boolean attest, String storePass,
-     String storePath, String iasCertPath, String attestationServer) throws Exception
+     String storePath, String iasCertPath, String attestationServer, int nonceCapacity, double nonceError) throws Exception
     {
         return new SecureDevice(device, attest, storePass,
-         storePath, iasCertPath, attestationServer); 
+         storePath, iasCertPath, attestationServer, nonceCapacity, nonceError); 
     }
 
 }

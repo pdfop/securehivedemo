@@ -15,7 +15,7 @@ import java.util.Hashtable;
 import java.util.Map;
 import java.util.Base64;
 import java.util.Random;  
-
+import java.util.Scanner;
 
 import java.security.cert.Certificate; 
 import java.security.spec.InvalidKeySpecException;
@@ -34,6 +34,7 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
+import javax.crypto.Mac;
 
 import java.io.FileInputStream; 
 import java.io.BufferedReader; 
@@ -56,6 +57,11 @@ import com.google.gson.*;
 import java.net.InetSocketAddress;
 import static org.junit.Assert.*; 
 
+import com.google.common.hash.BloomFilter; 
+import com.google.common.hash.Funnels;
+
+import java.nio.charset.StandardCharsets;
+
 
 public class SecureProcessor
 {
@@ -66,25 +72,33 @@ public class SecureProcessor
     private SocketChannel out; 
     // storing cerfiticates 
     private KeyStore store; 
-    private char[] pwdArray = "testpw".toCharArray(); 
+    private char[] pwdArray = null; 
     private final String storePath = "resources/SecureHiveClient.pkcs12";  
     // mutual authentication 
     private PrivateKey enclaveSK; 
     private PublicKey devicePK; 
     // message encryption
-    private SecretKey messageKey; 
+    private SecretKey messageKey;
+    private SecretKey macKey;  
 
     private ByteBuffer buffer = ByteBuffer.allocate(4096);
+    private BloomFilter<String> nonces; 
 
     // encoding 
     private static Base64.Decoder decoder = Base64.getDecoder(); 
     private static Base64.Encoder encoder = Base64.getEncoder(); 
 
-    private List<String> deviceIds = new ArrayList<String>();  
- 
-    public void init(int port) throws Exception
+    // overloaded method to pass default parameters 
+    public void init(int port, String storePass) throws Exception
+    {
+        init(port, storePass, 2500, 0.01d); 
+    }
+
+    public void init(int port, String storePass, int nonceCapacity, double nonceError) throws Exception
     { 
-        initSecurity(); 
+        pwdArray = storePass.toCharArray();
+        initSecurity();
+        nonces = BloomFilter.create(Funnels.stringFunnel(StandardCharsets.UTF_8), nonceCapacity, nonceError); 
         GsonBuilder builder = new GsonBuilder(); 
         JsonSerializer<DateTime> dateTimeSerializer = new JsonSerializer<DateTime>()
         {
@@ -138,20 +152,28 @@ public class SecureProcessor
      */
     public DeviceCommandWrapper encryptedCommand(String commandName, List<Parameter> parameters) throws Exception
     {
+        // initialize encryption cipher 
         Cipher encrypt = Cipher.getInstance("AES/CBC/PKCS5Padding");
         IvParameterSpec iv = generateIV();
         encrypt.init(Cipher.ENCRYPT_MODE, messageKey, iv); 
-
+        // initialize message authentication
+        Mac mac = Mac.getInstance("HmacSHA512");
+        mac.init(macKey);
+        StringBuilder sb = new StringBuilder(200); 
         for(Parameter param : parameters)
         {
             // encrypt parameter key and value
             param.setValue(encoder.encodeToString(encrypt.doFinal(param.getValue().getBytes())));
             param.setKey(encoder.encodeToString(encrypt.doFinal(param.getKey().getBytes())));
+            sb.append(param.getKey()); 
+            sb.append(param.getValue()); 
         }
-        // add IV and Nonce 
+        // set message for MAC
+        mac.update(sb.toString().getBytes()); 
+        // add IV, Nonce and MAC
         parameters.add(new Parameter("iv", encoder.encodeToString(iv.getIV()))); 
-        parameters.add(new Parameter("nonce", encoder.encodeToString(encrypt.doFinal(generateNonce().getBytes()))));   
-       
+        parameters.add(new Parameter("nonce", encoder.encodeToString(encrypt.doFinal(generateNonce()))));   
+        parameters.add(new Parameter("mac", encoder.encodeToString(mac.doFinal())));
         return new DeviceCommandWrapper(commandName, parameters); 
     }
 
@@ -167,13 +189,14 @@ public class SecureProcessor
             store = KeyStore.getInstance("pkcs12");
             fis = new FileInputStream(storePath); 
             store.load(fis, pwdArray);
-            fis.close();
+            fis.close(); 
         }
         catch(IOException  | KeyStoreException | CertificateException | NoSuchAlgorithmException e)
         {
             store = null; 
             System.out.println("KeyStore could not be loaded. \n" + e.getMessage()); 
-        } 
+        }
+
         try
         { 
             KeyStore.PasswordProtection storePass = new KeyStore.PasswordProtection(pwdArray);
@@ -196,13 +219,13 @@ public class SecureProcessor
         return new IvParameterSpec(iv);
     }
     /**
-     * Generate a time stamp as a String to be used as a nonce for a secureCommand
+     * Generate a 64bit nonce to ensure message freshness
      */
-    private String generateNonce()
+    private byte[] generateNonce()
     {
-        byte[] array = new byte[15];
+        byte[] array = new byte[8];
         new Random().nextBytes(array);
-        return new String(array, Charset.forName("UTF-8"));    
+        return array;     
     }
 
     /**
@@ -212,28 +235,55 @@ public class SecureProcessor
      */
     public void decrypt(DeviceNotificationWrapper notification) throws Exception
     {
-        JsonObject parameters = notification.getParameters();  
+        JsonObject parameters = notification.getParameters(); 
         if(parameters == null)
         {
             return; 
-        }
-
+        } 
         JsonObject decryptedParameters = new JsonObject(); 
+        // initialize decryption cipher 
         Cipher decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding"); 
         IvParameterSpec iv = new IvParameterSpec(decoder.decode(parameters.get("iv").getAsString()));
         decrypt.init(Cipher.DECRYPT_MODE, messageKey, iv);
-        java.util.Set<java.util.Map.Entry<java.lang.String,JsonElement>> entries = parameters.entrySet(); 
-        for(java.util.Map.Entry<String, JsonElement> entry : entries)
+        // initialize message authentication
+        Mac mac = Mac.getInstance("HmacSHA512");
+        mac.init(macKey);
+        StringBuilder sb = new StringBuilder(200); 
+        String clientMAC = parameters.get("mac").getAsString(); 
+        // extract and verify nonce 
+        String nonce = new String(decrypt.doFinal(decoder.decode(parameters.get("nonce").getAsString())));
+        boolean contained = nonces.mightContain(nonce); 
+        if(contained)
         {
-            if(entry.getKey().equals("iv"))
-            {
-                continue;
-            }
-            decryptedParameters.addProperty(new String(decrypt.doFinal(decoder.decode(entry.getKey()))),
-                new String(decrypt.doFinal(decoder.decode(entry.getValue().getAsString())))
-            ); 
+            decryptedParameters.addProperty("nonce-seen", Boolean.toString(true));
         } 
-        notification.setParameters(decryptedParameters);  
+        else
+        {
+            decryptedParameters.addProperty("nonce-seen", Boolean.toString(false)); 
+            nonces.put(nonce); 
+        }
+
+        // remove meta parameters before decrypting
+        parameters.remove("iv");
+        parameters.remove("nonce"); 
+        parameters.remove("mac");
+        for(java.util.Map.Entry<String, JsonElement> entry : parameters.entrySet())
+        {
+            sb.append(entry.getKey()); 
+            sb.append(entry.getValue().getAsString()); 
+            decryptedParameters.addProperty(new String(decrypt.doFinal(decoder.decode(entry.getKey()))), new String(decrypt.doFinal(decoder.decode(entry.getValue().getAsString()))));         
+        }
+        mac.update(sb.toString().getBytes()); 
+        String serverMAC = encoder.encodeToString(mac.doFinal());
+        if(clientMAC.equals(serverMAC))
+        {
+            notification.setParameters(decryptedParameters); 
+        }
+        else
+        {   
+            System.out.println("Message Authentication Failed"); 
+            notification.setParameters(new JsonObject()); 
+        }
     }
 
      /**
@@ -329,7 +379,7 @@ public class SecureProcessor
                 }
             }
 
-            String timestamp = DateTime.now().toString(); 
+            String timestamp = DateTime.now().toString();  
             List<Parameter> params = new ArrayList<Parameter>(); 
             params.add(new Parameter("timestamp", timestamp)); 
 
@@ -354,16 +404,27 @@ public class SecureProcessor
                     JsonObject parameters = notification.getParameters();
                     Signature publicSignature = Signature.getInstance("SHA256withRSA");
                     publicSignature.initVerify(devicePK);
-                    publicSignature.update(timestamp.getBytes());
+
+                    Cipher decrypt=Cipher.getInstance("RSA/ECB/PKCS1Padding");
+                    decrypt.init(Cipher.PRIVATE_KEY, enclaveSK);
+ 
                     byte[] signatureBytes = decoder.decode(parameters.get("signed").getAsString());
+                    String sigString = parameters.get("key").getAsString() + parameters.get("macKey").getAsString() + timestamp; 
+                    publicSignature.update(sigString.getBytes());
                     Boolean verified = publicSignature.verify(signatureBytes);
                     if(verified)
                     { 
-                        Cipher decrypt=Cipher.getInstance("RSA/ECB/PKCS1Padding");
-                        decrypt.init(Cipher.PRIVATE_KEY, enclaveSK);
                         byte[] decodedKey = decrypt.doFinal(decoder.decode(parameters.get("key").getAsString()));
+                        byte[] decodedMacKey = decrypt.doFinal(decoder.decode(parameters.get("macKey").getAsString()));
                         messageKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
+                        macKey = new SecretKeySpec(decodedMacKey, 0, decodedKey.length, "HmacSHA512");
                         return; 
+                    }
+                    else
+                    {
+                        System.out.println("Invalid Signature. Exiting."); 
+                        System.exit(1); 
+
                     }
                 } 
             }

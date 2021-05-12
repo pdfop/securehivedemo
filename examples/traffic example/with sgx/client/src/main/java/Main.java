@@ -22,7 +22,7 @@ public class Main
     private void init() throws Exception
     {
         MyThreadedProcessor p = new MyThreadedProcessor(130); 
-        p.init(port); 
+        p.init(port, "testpw"); 
 
     }
 
