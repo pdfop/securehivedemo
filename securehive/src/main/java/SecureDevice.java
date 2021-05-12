@@ -203,6 +203,7 @@ public class SecureDevice
                         String keyString = encoder.encodeToString(encryptedKey);  
                         // encrypt the MAC key using the enclave public key
                         byte[] encryptedMacKey = encrypt.doFinal(macKey.getEncoded()); 
+                        String macKeyString = encoder.encodeToString(encryptedMacKey);
 
                         Signature privateSignature = Signature.getInstance("SHA256withRSA");
                         privateSignature.initSign(deviceSK);
