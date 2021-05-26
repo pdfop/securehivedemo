@@ -62,7 +62,7 @@ Finally each SecureHive application expects a key store:
       * MRSIGNER as password entry 
       * MRENCLAVE as password entry 
       * SGX Service Provider ID as password entry
-  * content for a Device application: 
+  * content for an enclave application: 
     * certificate and secret key for the SecureProcssor, named enclaveCert
     * certificate and public key for each Device, named by device ID 
 # Classes 
