@@ -20,10 +20,10 @@ public class Main
 
     }
 
-    private void init(int port) throws Exception
+    private void init(int port, String storePass) throws Exception
     {
         MySecureProcessor processor = new MySecureProcessor(); 
-        processor.init(port);
+        processor.init(port, storePass);
     }
 
     private class MySecureProcessor extends SecureProcessor
@@ -33,8 +33,6 @@ public class Main
         {  
             try
             {
-
-            
                 List<Parameter> response = new ArrayList<Parameter>(); 
                 JsonObject parameters = notification.getParameters(); 
 

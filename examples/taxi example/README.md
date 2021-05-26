@@ -1,4 +1,4 @@
-This case study is inspired by a version presented in Styx. 
+This case study is inspired by a version presented in STYX. 
 
 Taxis record meta information about their fares and publish it to a processing node. The node keeps the most recent 15 minutes of data in a cache. A monitoring application makes requests at a rate of 1/second. Whenever the processing node receives a request it calcultes the 5 most common routes in the last 15 minutes. A route is represented by the starting and ending grid cell of the trip. It additionally calculates the average distance and average cost per fare per route.  
 
@@ -28,6 +28,6 @@ Response format:
     average cost for fares with the same pickup and dropoff locations  
 
 
-Resources:      
-STYX: https://dl.acm.org/doi/10.1145/2987550.2987574
-Javallier: https://github.com/n1analytics/javallier   
+Resources:        
+STYX: https://dl.acm.org/doi/10.1145/2987550.2987574  
+Javallier: https://github.com/n1analytics/javallier     

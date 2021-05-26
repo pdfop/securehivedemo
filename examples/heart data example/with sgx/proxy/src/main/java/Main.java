@@ -27,7 +27,7 @@ public class Main {
     // Devices managed by this Host App 
     List<String> deviceIds; 
     // proxy connection
-    private final String enclaveIP = "10.0.1.1"; 
+    private final String enclaveIP = "127.0.0.1"; 
     private final int port = 6767; 
 
 

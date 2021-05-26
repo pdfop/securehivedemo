@@ -168,11 +168,15 @@ public class SecureProcessor
             sb.append(param.getKey()); 
             sb.append(param.getValue()); 
         }
+        // make mac package unique by adding nonce 
+        Parameter nonce = new Parameter("nonce", encoder.encodeToString(encrypt.doFinal(generateNonce()))); 
+        sb.append(nonce.getKey()); 
+        sb.append(nonce.getValue()); 
         // set message for MAC
         mac.update(sb.toString().getBytes()); 
         // add IV, Nonce and MAC
         parameters.add(new Parameter("iv", encoder.encodeToString(iv.getIV()))); 
-        parameters.add(new Parameter("nonce", encoder.encodeToString(encrypt.doFinal(generateNonce()))));   
+        parameters.add(nonce);   
         parameters.add(new Parameter("mac", encoder.encodeToString(mac.doFinal())));
         return new DeviceCommandWrapper(commandName, parameters); 
     }
@@ -252,6 +256,8 @@ public class SecureProcessor
         String clientMAC = parameters.get("mac").getAsString(); 
         // extract and verify nonce 
         String nonce = new String(decrypt.doFinal(decoder.decode(parameters.get("nonce").getAsString())));
+        // save encrypted nonce for MAC
+        String encNonce = parameters.get("nonce").getAsString();
         boolean contained = nonces.mightContain(nonce); 
         if(contained)
         {
@@ -273,8 +279,12 @@ public class SecureProcessor
             sb.append(entry.getValue().getAsString()); 
             decryptedParameters.addProperty(new String(decrypt.doFinal(decoder.decode(entry.getKey()))), new String(decrypt.doFinal(decoder.decode(entry.getValue().getAsString()))));         
         }
+        // add nonce to client server mac 
+        sb.append("nonce"); 
+        sb.append(encNonce); 
         mac.update(sb.toString().getBytes()); 
         String serverMAC = encoder.encodeToString(mac.doFinal());
+        // compare macs 
         if(clientMAC.equals(serverMAC))
         {
             notification.setParameters(decryptedParameters); 

@@ -3,9 +3,9 @@ The case study calculates the heartrate in beats per minute and the risk of Long
 A similar case study was conducted in STYX. The LQTS calculation is inspired by a study by Kocabas & Soyata.   
 There is no homomorphic comparison for this study as there is no native java implementation for the scheme used by Kobacas.  
 
-Papers: 
-STYX: https://dl.acm.org/doi/10.1145/2987550.2987574
-Kobacas: https://ieeexplore.ieee.org/document/7214088
+Papers:   
+STYX: https://dl.acm.org/doi/10.1145/2987550.2987574  
+Kobacas: https://ieeexplore.ieee.org/document/7214088  
 
 The code in  the respective device/ subdirectories runs on a trusted device, it generates data and publishes it as a notification.    
 

@@ -11,7 +11,7 @@ There are three versions of this case study:
 
 In any case the code in device/ runs on a trusted device, it generates data and publishes it as a notification.    
 For the SecureHive version the ode in proxy/ runs on a untrusted processing node outside of the enclave, it establishes the connection between the DeviceHive server and the enclave.   
-The code in client/ runs on a untrusted processing node. In the case of SecureHive it runs inside an enclave using sgx-lkl. It implements the processing logic for arriving notifications it receives from the proxy and creates encrypted commands that it passes to the proxy to publish. In the homomorphic version it runs in untrusted user space as normal, however it performs the operations on encrypted data. This is possible using the Modular OPE scheme as implemented by aymanmadkour and the Pallier scheme as implemented in Javallier. 
+The code in client/ runs on a untrusted processing node. In the case of SecureHive it runs inside an enclave using sgx-lkl. It implements the processing logic for arriving notifications it receives from the proxy and creates encrypted commands that it passes to the proxy to publish. In the homomorphic version it runs in untrusted user space as normal, however it performs the operations on encrypted data. This is possible using the fast ope scheme as implemented by aymanmadkour and the Pallier scheme as implemented in Javallier. 
 
 The data is randomly generated in the same way as presented in SecureScala. 
 Each Sensor sends 500 entries. The delay between entries is randomly generated as in SecureScala.   
@@ -21,7 +21,7 @@ Data format:
 	speed    
 	current time  
 
-Processor compares speed in the notification with internal speed limit for the sensor. If the entry's speed was above the limit it responds with a command containing:  
+The SecureProcessor compares the speed in the notification with internal speed limit for the sensor. If the entry's speed exceeds the limit it responds with an encrypted DeviceCommand containing:  
 	license plate    
 	speed difference  
 	original time stamp  
