@@ -1,7 +1,7 @@
 This case study is inspired by Complex Event Processing case study presented in SecureScala.  
 
 There are a number of traffic cameras / speed sensors along a route. Whenever a car passes a sensor the license plate, current speed and current time are recorded. 
-Based on the ID of the sensor the speed limit in that area is known. The speed values are compared to the speed limit. If a car was faster than the speed limit the difference is calculated and a 'speeding' event is issued. The processing node creates a DeviceCommand with the license plate, speed difference and time of the violation.  
+Based on the ID of the sensor the speed limit in that area is known. The speed values are compared to the speed limit. If a car exceeds the speed limit the difference is calculated and a 'speeding' event is issued. The processing node creates a DeviceCommand with the license plate, speed difference and time of the violation.  
 
 There are three versions of this case study:  
 	regular DeviceHive  
@@ -9,9 +9,9 @@ There are three versions of this case study:
 	a version that performs its processing on homorphically encypted data
 
 
-In any case the code in device/ runs on a trusted device, it generates data and publishes it as a notification.    
-For the SecureHive version the ode in proxy/ runs on a untrusted processing node outside of the enclave, it establishes the connection between the DeviceHive server and the enclave.   
-The code in client/ runs on a untrusted processing node. In the case of SecureHive it runs inside an enclave using sgx-lkl. It implements the processing logic for arriving notifications it receives from the proxy and creates encrypted commands that it passes to the proxy to publish. In the homomorphic version it runs in untrusted user space as normal, however it performs the operations on encrypted data. This is possible using the fast ope scheme as implemented by aymanmadkour and the Pallier scheme as implemented in Javallier. 
+In any case the code in device/ runs on a trusted device. It generates data and publishes it as a notification.    
+For the SecureHive version the code in proxy/ runs on a untrusted processing node outside of the enclave. It establishes the connection between the DeviceHive server and the enclave.   
+The code in client/ runs on a untrusted processing node. In the case of SecureHive it runs inside an enclave using SGX-LKL. It implements the processing logic for arriving notifications it receives from the proxy and creates encrypted commands that it passes to the proxy to publish. In the homomorphic version it runs in untrusted user space as normal, however it performs the operations on encrypted data. This is possible using the fast ope scheme as implemented by aymanmadkour and the Pallier scheme as implemented in Javallier. 
 
 The data is randomly generated in the same way as presented in SecureScala. 
 Each Sensor sends 500 entries. The delay between entries is randomly generated as in SecureScala.   
