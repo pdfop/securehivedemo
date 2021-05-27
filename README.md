@@ -4,10 +4,11 @@
 
 SecureHive extends the open source IoT communication framework DeviceHive with additional security guarantees.   
 The system offers DeviceHive users private computation of their data on untrusted hardware e.g. cloud servers.   
-This privacy is provided by running the processing logic inside SGX enclaves. SGX-LKL is used to enable unmodified java programs to run in an SGX enclave.   
-SecureHive provides extensions to the regular DeviceHive java client library. The regular library remains unmodified. The extensions assume the client library version 3.1.2. 
+This privacy is provided by running the processing logic inside SGX enclaves. SGX-LKL is used to allow unmodified Java programs to run in an SGX enclave.   
+SecureHive provides extensions to the regular DeviceHive Java client library while the library itself remains unmodified.    
 
-SecureHive makes the following assumptions underlying DeviceHive system:   
+
+SecureHive makes the following assumptions about underlying DeviceHive system:   
   * The data is generated and published by a trusted Device    
   * The Device knows which processing node it will be communicating with  
   * The DeviceHive server may run on untrusted hardware
