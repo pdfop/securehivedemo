@@ -1,6 +1,6 @@
 This case study is inspired by a version presented in STYX. 
 
-Taxis record meta information about their fares and publish it to a processing node. The node keeps the most recent 15 minutes of data in a cache. A monitoring application makes requests at a rate of 1/second. Whenever the processing node receives a request it calcultes the 5 most common routes in the last 15 minutes. A route is represented by the starting and ending grid cell of the trip. It additionally calculates the average distance and average cost per fare per route.  
+Taxis record meta information about their fares and publish it to a processing node. The node keeps the most recent 15 minutes of data in a cache. A monitoring application makes requests at a rate of 1/second. Whenever the processing node receives a request it calculates the 5 most common routes in the last 15 minutes. A route is represented by the starting and ending grid cell of the trip. It additionally calculates the average distance and average cost per fare per route.  
 
 It uses a taxi trip data set published by New York city TLC. It is available here: https://www1.nyc.gov/site/tlc/about/tlc-trip-record-data.page   
 
