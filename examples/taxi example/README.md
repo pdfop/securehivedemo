@@ -13,19 +13,19 @@ There are again 3 versions of this case study:
 The data frequency is determined by the rate at which taxis finished their fares in the data set. The data is sorted by dropoff time. The difference between the dropoff time of two consecutive entries is the data set is the delay between their publication in the system.  
 
 Data format:  
-    pickup location  
-    pickup time  
-    dropoff location  
-    dropoff time  
-    distance  
-    cost  
+  * pickup location  
+  * pickup time    
+  * dropoff location  
+  * dropoff time  
+  * distance  
+  * cost  
 
 Response format:  
-    rank based on popularity within the last 15 minutes  
-    pickup location  
-    dropoff location  
-    average distance for fares with the same pickup and dropoff locations  
-    average cost for fares with the same pickup and dropoff locations  
+  * rank based on popularity within the last 15 minutes  
+  * pickup location  
+  * dropoff location  
+  * average distance for fares with the same pickup and dropoff locations  
+  * average cost for fares with the same pickup and dropoff locations  
 
 
 Resources:        
