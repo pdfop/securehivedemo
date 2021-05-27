@@ -24,8 +24,8 @@ Response format:
   * rank based on popularity within the last 15 minutes  
   * pickup location  
   * dropoff location  
-  * average distance for fares with the same pickup and dropoff locations  
-  * average cost for fares with the same pickup and dropoff locations  
+  * average distance for fares on that route  
+  * average cost for fares on that route   
 
 
 Resources:        
