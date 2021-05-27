@@ -18,7 +18,8 @@ The data rate is dependent on the qt interval value in the data sample, simulati
 
 Data Format:  
   * RR interval value in milliseconds     
-  * QT interval value in milliseconds    
+  * QT interval value in milliseconds  
+  
 The processor uses theses values to calculate the current heartrate in bpm and analyses the QT interval for LQTS using Bazett's formula  
 
 Response:    
