@@ -16,15 +16,15 @@ The code in client/ runs on a untrusted processing node. In the case of SecureHi
 The data is randomly generated in the same way as presented in SecureScala. 
 Each Sensor sends 500 entries. The delay between entries is randomly generated as in SecureScala.   
 
-Data format:  
-	license plate    
-	speed    
-	current time  
+Data format:    
+ * license plate    
+  * speed    
+  * current time  
 
 The SecureProcessor compares the speed in the notification with internal speed limit for the sensor. If the entry's speed exceeds the limit it responds with an encrypted DeviceCommand containing:  
-	license plate    
-	speed difference  
-	original time stamp  
+  * license plate    
+  * speed difference  
+  * original time stamp  
 
 
 Resources:    
