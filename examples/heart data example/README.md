@@ -16,11 +16,10 @@ Data is taken from a heart data measurement data set available at: https://www.o
 One sensor sends 450 data packets to the enclave.     
 The data rate is dependent on the qt interval value in the data sample, simulating sending data each time a heartbeat is recorded. (resulting in sending rates of ~60-100 messages / minute)    
 
-Data Format:    
+Data Format:  
   * RR interval value in milliseconds     
-  * QT interval value in milliseconds  
+  * QT interval value in milliseconds    
 The processor uses theses values to calculate the current heartrate in bpm and analyses the QT interval for LQTS using Bazett's formula  
-
 
 Response:    
   * heartrate in bpm    
