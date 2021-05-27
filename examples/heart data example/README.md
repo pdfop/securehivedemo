@@ -9,10 +9,10 @@ Kobacas: https://ieeexplore.ieee.org/document/7214088
 
 The code in  the respective device/ subdirectories runs on a trusted device, it generates data and publishes it as a notification.    
 
-For the 'with sgx/' version the code in proxy/ runs on a untrusted processing node outside of the enclave, it establishes the connection between the devicehive server and the enclave.  
+For the 'with sgx/' version the code in proxy/ runs on a untrusted processing node outside of the enclave, it establishes the connection between the Devicehive server and the enclave.  
 The code in client/ runs on a untrusted processing node inside an enclave using sgx-lkl. It implements the processing logic for arriving notifications it receives from the proxy and creates encrypted commands that it passes to the proxy to publish.   
 
-Data is taken from a heart data measurement data set available at:      
+Data is taken from a heart data measurement data set available at: https://www.openml.org/d/5          
 One sensor sends 450 data packets to the enclave.     
 The data rate is dependent on the qt interval value in the data sample, simulating sending data each time a heartbeat is recorded. (resulting in sending rates of ~60-100 messages / minute)    
 
